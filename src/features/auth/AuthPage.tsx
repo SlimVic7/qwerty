@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase.js';
 
+const EMAIL_OTP_LENGTH = 6;
+
 type AuthMode = 'signin' | 'register';
 type Method = 'otp' | 'password';
 type OtpState = 'email' | 'verify';
@@ -63,7 +65,7 @@ export function AuthPage({ defaultMode = 'signin' }: { defaultMode?: AuthMode })
       if (error) throw error;
       
       setOtpState('verify');
-      setMessage({ text: 'A 6-digit code has been sent to your email.', type: 'success' });
+      setMessage({ text: `A ${EMAIL_OTP_LENGTH}-digit code has been sent to your email.`, type: 'success' });
     } catch (error: any) {
       handleError(error, "We couldn't connect to the authentication service. Please try again.");
     } finally {
@@ -117,7 +119,7 @@ export function AuthPage({ defaultMode = 'signin' }: { defaultMode?: AuthMode })
           // Requires email confirmation
           setMethod('otp');
           setOtpState('verify');
-          setMessage({ text: 'Registration successful! Please enter the 6-digit code sent to your email to confirm.', type: 'success' });
+          setMessage({ text: `Registration successful! Please enter the ${EMAIL_OTP_LENGTH}-digit code sent to your email to confirm.`, type: 'success' });
         } else if (data.session) {
           navigate('/candidate');
         }
@@ -155,25 +157,45 @@ export function AuthPage({ defaultMode = 'signin' }: { defaultMode?: AuthMode })
         {otpState === 'verify' ? (
           <form onSubmit={handleVerifyOtp} className="space-y-4">
             <div className="text-center mb-4">
-              <p className="text-sm text-slate-600">Enter the 6-digit code sent to:</p>
+              <p className="text-sm text-slate-600">Enter the {EMAIL_OTP_LENGTH}-digit code sent to:</p>
               <p className="font-medium text-slate-900">{email}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">6-Digit Code</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{EMAIL_OTP_LENGTH}-Digit Code</label>
               <input
                 type="text"
                 required
-                maxLength={6}
-                pattern="\d{6}"
+                maxLength={EMAIL_OTP_LENGTH}
+                pattern={`\\d{${EMAIL_OTP_LENGTH}}`}
                 value={otpCode}
+                aria-label={`${EMAIL_OTP_LENGTH}-Digit Verification Code`}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const pastedData = e.clipboardData.getData('text');
+                  const digitsOnly = pastedData.replace(/\D/g, '');
+                  
+                  if (digitsOnly.length > EMAIL_OTP_LENGTH) {
+                    setMessage({
+                      text: "This code does not match the configured QWERTY verification-code length. Please request a new code.",
+                      type: 'error'
+                    });
+                  }
+                  
+                  const target = e.target as HTMLInputElement;
+                  const start = target.selectionStart ?? 0;
+                  const end = target.selectionEnd ?? 0;
+                  
+                  const newValue = otpCode.slice(0, start) + digitsOnly + otpCode.slice(end);
+                  setOtpCode(newValue.slice(0, EMAIL_OTP_LENGTH));
+                }}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                 className="w-full p-2 border border-slate-300 rounded focus:border-[#0B3D2E] focus:ring-1 focus:ring-[#0B3D2E] outline-none text-center tracking-widest text-lg font-mono"
-                placeholder="000000"
+                placeholder={"0".repeat(EMAIL_OTP_LENGTH)}
               />
             </div>
             <button 
               type="submit" 
-              disabled={loading || otpCode.length !== 6}
+              disabled={loading || otpCode.length !== EMAIL_OTP_LENGTH}
               className="w-full bg-[#0B3D2E] text-white py-2 px-4 rounded font-semibold hover:bg-[#1E6B50] transition-colors disabled:opacity-50"
             >
               {loading ? 'Verifying...' : 'Verify'}
