@@ -28,6 +28,12 @@ vi.mock('../../../../../server/db/supabase.js', () => ({
 }));
 
 describe('Jobs Express Router (RPC Hardening)', () => {
+  it('POST missing description returns 400', async () => {
+    const res = await runRoute('POST', '/', { title: 'T', company_name: 'C' }, { 'x-mock-role': 'admin' });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Title, company name, and description are required' });
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

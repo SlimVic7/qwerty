@@ -1,44 +1,56 @@
+/**
+ * QWERTY Server Application Root — Single Express Composition Root
+ * 
+ * Configures middleware, API routes, API 404 handler, and centralized error handling.
+ * Does NOT start listeners or configure Vite/static serving.
+ */
+
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { jobsRouter } from './routes/jobs.js';
+import { jobImportsRouter } from './routes/jobImports.js';
+import { candidateRouter } from './routes/candidate.js';
+import { cvParsingRouter } from './routes/cvParsing.js';
+import { talentPoolRouter } from './routes/talentPool.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(__dirname, '..');
-
-async function createServer() {
+export function createExpressApp(): express.Express {
   const app = express();
-  app.use(express.json());
 
-  // API Routes will go here
+  // JSON Body Parser with 3mb limit
+  app.use(express.json({ limit: '3mb' }));
+
+  // Health check endpoint
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'QWERTY API is running' });
   });
 
+  // API Routers
+  app.use('/api/candidate', candidateRouter);
+  app.use('/api/candidate/cvs', cvParsingRouter);
   app.use('/api/ops/jobs', jobsRouter);
+  app.use('/api/ops/imports', jobImportsRouter);
+  app.use('/api/ops/talent', talentPoolRouter);
 
-  const isProd = process.env.NODE_ENV === 'production';
-
-  if (!isProd) {
-    // Development mode: use Vite's development server
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
+  // Strict API 404 handler: Guarantees /api/* requests never fall through to SPA HTML
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({
+      error: 'API_ENDPOINT_NOT_FOUND',
+      message: `Cannot ${req.method} ${req.originalUrl}`
     });
-    app.use(vite.middlewares);
-  } else {
-    // Production mode: serve static files from dist
-    app.use(express.static(path.resolve(root, 'dist')));
-    app.use('*', (req, res) => {
-      res.sendFile(path.resolve(root, 'dist', 'index.html'));
-    });
-  }
-
-  const port = process.env.PORT || 3000;
-  app.listen(port, () => {
-    console.log(`Server is running at http://localhost:${port}`);
   });
+
+  // Centralized API error handling
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (res.headersSent) {
+      return next(err);
+    }
+    console.error('[API_ERROR]', err);
+    res.status(err.status || 500).json({
+      error: err.code || 'INTERNAL_SERVER_ERROR',
+      message: err.message || 'An unexpected server error occurred.'
+    });
+  });
+
+  return app;
 }
 
-createServer().catch(console.error);
+export const app = createExpressApp();

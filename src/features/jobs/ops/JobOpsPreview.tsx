@@ -11,7 +11,11 @@ export function JobOpsPreview() {
 
   useEffect(() => {
     async function loadJob() {
-      if (!id) return;
+      if (!id || id === 'undefined') {
+        setError('Unable to determine this job record. Please return to the jobs list and try again.');
+        setLoading(false);
+        return;
+      }
       try {
         const data = await jobsOpsService.getJob(id);
         setJob(data);

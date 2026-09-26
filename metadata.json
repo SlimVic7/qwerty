@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "QWERTY",
+  "description": "QWERTY: Find jobs and tailor truthful applications.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,51 +1,36 @@
-import { supabase } from '../../../lib/supabase.js';
+import { authFetch } from '../../../lib/authFetch.js';
 
-async function authFetch(endpoint: string, options: RequestInit = {}) {
-  const { data: { session }, error } = await supabase.auth.getSession();
-  if (error || !session) throw new Error('Not authenticated');
-
-  const headers = {
-    ...options.headers,
-    'Authorization': `Bearer ${session.access_token}`,
-    'Content-Type': 'application/json'
-  };
-
-  const response = await fetch(endpoint, { ...options, headers });
-  
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `Request failed with status ${response.status}`);
-  }
-
-  return response.json();
-}
+const guardId = (id: string) => {
+  if (!id || id === 'undefined') throw new Error('Missing job ID');
+  return id;
+};
 
 export const jobsOpsService = {
   listJobs: () => authFetch('/api/ops/jobs'),
   
-  getJob: (id: string) => authFetch(`/api/ops/jobs/${id}`),
+  getJob: (id: string) => authFetch(`/api/ops/jobs/${guardId(id)}`),
   
-  createDraft: (title: string, company_name: string) => 
+  createDraft: (jobData: any) => 
     authFetch('/api/ops/jobs', { 
       method: 'POST', 
-      body: JSON.stringify({ title, company_name }) 
+      body: JSON.stringify(jobData) 
     }),
     
   updateDraft: (id: string, updates: any) => 
-    authFetch(`/api/ops/jobs/${id}`, { 
+    authFetch(`/api/ops/jobs/${guardId(id)}`, { 
       method: 'PATCH', 
       body: JSON.stringify(updates) 
     }),
     
-  publish: (id: string) => authFetch(`/api/ops/jobs/${id}/publish`, { method: 'POST' }),
+  publishJob: (id: string) => authFetch(`/api/ops/jobs/${guardId(id)}/publish`, { method: 'POST' }),
   
-  unpublish: (id: string) => authFetch(`/api/ops/jobs/${id}/unpublish`, { method: 'POST' }),
+  unpublishJob: (id: string) => authFetch(`/api/ops/jobs/${guardId(id)}/unpublish`, { method: 'POST' }),
   
-  close: (id: string) => authFetch(`/api/ops/jobs/${id}/close`, { method: 'POST' }),
+  closeJob: (id: string) => authFetch(`/api/ops/jobs/${guardId(id)}/close`, { method: 'POST' }),
   
-  archive: (id: string) => authFetch(`/api/ops/jobs/${id}/archive`, { method: 'POST' }),
+  archiveJob: (id: string) => authFetch(`/api/ops/jobs/${guardId(id)}/archive`, { method: 'POST' }),
   
-  feature: (id: string) => authFetch(`/api/ops/jobs/${id}/feature`, { method: 'POST' }),
+  featureJob: (id: string) => authFetch(`/api/ops/jobs/${guardId(id)}/feature`, { method: 'POST' }),
   
-  unfeature: (id: string) => authFetch(`/api/ops/jobs/${id}/unfeature`, { method: 'POST' })
+  unfeatureJob: (id: string) => authFetch(`/api/ops/jobs/${guardId(id)}/unfeature`, { method: 'POST' })
 };

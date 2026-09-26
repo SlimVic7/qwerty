@@ -31,20 +31,6 @@ export function JobsOpsList() {
     }
   };
 
-  const handleCreateDraft = async () => {
-    const title = prompt('Enter draft job title:');
-    if (!title) return;
-    const company = prompt('Enter company name:');
-    if (!company) return;
-
-    try {
-      await jobsOpsService.createDraft(title, company);
-      loadJobs();
-    } catch (err: any) {
-      alert(err.message || 'Failed to create draft');
-    }
-  };
-
   if (loading) return <div className="p-8">Loading...</div>;
   if (error) return <div className="p-8 text-red-600">Error: {error}</div>;
 
@@ -53,12 +39,12 @@ export function JobsOpsList() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Internal Job Management</h1>
         {canCreate && (
-          <button 
-            onClick={handleCreateDraft}
+          <Link 
+            to="/0ps26/jobs/new"
             className="bg-[#0B3D2E] text-white px-4 py-2 rounded font-medium hover:bg-[#155a44]"
           >
             New Job
-          </button>
+          </Link>
         )}
       </div>
 

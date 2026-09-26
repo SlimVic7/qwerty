@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { MapPin, Briefcase, Building2, Clock, Globe, ArrowLeft, Send, ExternalLink, Calendar } from 'lucide-react';
-import { getPublishedJobBySlug, Job } from './jobs.service';
+import { MapPin, Briefcase, Building2, Clock, Globe, ArrowLeft, Send, ExternalLink, Calendar, Compass } from 'lucide-react';
+import { getPublishedJobBySlug, Job } from './jobs.service.js';
+import { JobAlignmentCard } from '../matching/JobAlignmentCard.js';
+import { SkillsGapCard } from '../skillsGap/SkillsGapCard.js';
+import { CvTailoringCard } from '../tailoring/CvTailoringCard.js';
+import { AlignmentHistoryCard } from '../alignmentHistory/AlignmentHistoryCard.js';
+import { useAuth } from '../../lib/auth.js';
 
 export function JobDetailPage() {
   const { slug } = useParams<{ slug: string }>();
+  const { user } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -188,14 +194,61 @@ export function JobDetailPage() {
       <div className="max-w-4xl mx-auto px-4 mt-8 grid grid-cols-1 md:grid-cols-3 gap-8">
         
         {/* Left Column - Details */}
-        <div className="md:col-span-2 space-y-8 bg-white p-6 md:p-8 rounded-xl border border-slate-200 shadow-sm">
-          
-          <section>
-            <h3 className="text-xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-100">About the Role</h3>
-            <div className="prose prose-slate max-w-none whitespace-pre-wrap text-slate-700 leading-relaxed">
-              {job.description}
+        <div className="md:col-span-2 space-y-8">
+
+          {/* Candidate Role Alignment Section */}
+          {user ? (
+            <div className="space-y-4">
+              <div id="job-alignment-card">
+                <JobAlignmentCard 
+                  jobId={job.id} 
+                  jobTitle={job.title} 
+                  companyName={job.company_name} 
+                />
+              </div>
+              <SkillsGapCard 
+                jobId={job.id} 
+                jobTitle={job.title} 
+                companyName={job.company_name} 
+              />
+              <CvTailoringCard 
+                jobId={job.id} 
+                jobTitle={job.title} 
+                companyName={job.company_name} 
+              />
+              <AlignmentHistoryCard
+                jobId={job.id}
+                jobTitle={job.title}
+                companyName={job.company_name}
+              />
             </div>
-          </section>
+          ) : (
+            <div className="bg-gradient-to-br from-slate-50 to-white rounded-xl border border-slate-200 p-6 shadow-sm flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl bg-[#0B3D2E]/10 flex items-center justify-center shrink-0 text-[#0B3D2E]">
+                <Compass className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm mb-1">Check Role Alignment</h4>
+                <p className="text-xs text-slate-600 mb-3">
+                  Sign in with your QWERTY candidate account to compare your approved profile against this role's requirements.
+                </p>
+                <Link
+                  to="/auth"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#0B3D2E] hover:bg-[#155a44] text-white rounded-lg text-xs font-semibold transition-colors shadow-sm"
+                >
+                  Sign In to Check Alignment
+                </Link>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white p-6 md:p-8 rounded-xl border border-slate-200 shadow-sm space-y-8">
+            <section>
+              <h3 className="text-xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-100">About the Role</h3>
+              <div className="prose prose-slate max-w-none whitespace-pre-wrap text-slate-700 leading-relaxed">
+                {job.description}
+              </div>
+            </section>
 
           {job.responsibilities && (
             <section>
@@ -232,6 +285,7 @@ export function JobDetailPage() {
               </div>
             </section>
           )}
+          </div>
         </div>
 
         {/* Right Column - Meta Sidebar */}

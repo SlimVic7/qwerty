@@ -1,8 +1,10 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase.js';
+import { useAuth } from '../../lib/auth.js';
 
 export function OpsLayout() {
   const navigate = useNavigate();
+  const { roles } = useAuth();
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -17,7 +19,18 @@ export function OpsLayout() {
         </div>
         <nav className="flex-1 p-4 flex flex-col gap-2">
           <Link to="/0ps26" className="p-2 rounded hover:bg-slate-800 hover:text-white font-medium transition-colors">Overview</Link>
-          <Link to="/0ps26/jobs" className="p-2 rounded hover:bg-slate-800 hover:text-white font-medium transition-colors">Jobs</Link>
+          <div className="flex flex-col gap-1 mt-2">
+            <div className="p-2 font-medium text-slate-400 text-sm uppercase tracking-wider">Jobs</div>
+            <Link to="/0ps26/jobs" className="p-2 ml-2 rounded hover:bg-slate-800 hover:text-white font-medium transition-colors text-sm">All Jobs</Link>
+            <Link to="/0ps26/jobs/new" className="p-2 ml-2 rounded hover:bg-slate-800 hover:text-white font-medium transition-colors text-sm">New Job</Link>
+            <Link to="/0ps26/jobs/imports" className="p-2 ml-2 rounded hover:bg-slate-800 hover:text-white font-medium transition-colors text-sm">Bulk Import</Link>
+          </div>
+          {roles.includes('recruiter') && (
+            <div className="flex flex-col gap-1 mt-2">
+              <div className="p-2 font-medium text-slate-400 text-sm uppercase tracking-wider">Recruitment</div>
+              <Link to="/0ps26/talent" className="p-2 ml-2 rounded hover:bg-slate-800 hover:text-white font-medium transition-colors text-sm">Talent Pool</Link>
+            </div>
+          )}
         </nav>
         <div className="p-4 border-t border-slate-800">
           <button onClick={handleSignOut} className="w-full p-2 text-left text-red-400 hover:bg-slate-800 rounded font-medium transition-colors">

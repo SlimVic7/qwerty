@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { PublicLayout } from './layouts/PublicLayout.js';
 import { CandidateLayout } from './layouts/CandidateLayout.js';
+import { CandidateProfilePage } from '../features/candidate/CandidateProfilePage.js';
+import { CvTailoringWorkspace } from '../features/tailoring/CvTailoringWorkspace.js';
 import { OpsLayout } from './layouts/OpsLayout.js';
 import { ProtectedRoute } from '../components/ProtectedRoute.js';
 import { RoleRoute } from '../components/RoleRoute.js';
@@ -10,6 +12,11 @@ import { JobDetailPage } from '../features/jobs/JobDetailPage.js';
 import { JobsOpsList } from '../features/jobs/ops/JobsOpsList.js';
 import { JobOpsEditor } from '../features/jobs/ops/JobOpsEditor.js';
 import { JobOpsPreview } from '../features/jobs/ops/JobOpsPreview.js';
+import { JobBulkImportPage } from '../features/jobs/ops/imports/JobBulkImportPage.js';
+import { JobBatchReviewPage } from '../features/jobs/ops/imports/JobBatchReviewPage.js';
+import { TalentPoolSearchPage } from '../features/talent/TalentPoolSearchPage.js';
+import { TalentCandidateDetailPage } from '../features/talent/TalentCandidateDetailPage.js';
+import { AlignmentHistoryWorkspace } from '../features/alignmentHistory/AlignmentHistoryWorkspace.js';
 
 export function Router() {
   return (
@@ -30,7 +37,9 @@ export function Router() {
         <Route path="/candidate" element={<ProtectedRoute />}>
           <Route element={<CandidateLayout />}>
             <Route index element={<div className="p-8"><h1>My QWERTY</h1></div>} />
-            <Route path="profile" element={<div className="p-8"><h1>Professional Profile</h1></div>} />
+            <Route path="profile" element={<CandidateProfilePage />} />
+            <Route path="jobs/:jobId/history" element={<AlignmentHistoryWorkspace />} />
+            <Route path="tailoring/:sessionId" element={<CvTailoringWorkspace />} />
           </Route>
         </Route>
 
@@ -40,8 +49,16 @@ export function Router() {
             <Route index element={<div className="p-8"><h1>Ops Dashboard</h1></div>} />
             <Route path="jobs" element={<JobsOpsList />} />
             <Route path="jobs/new" element={<JobOpsEditor />} />
+            <Route path="jobs/imports" element={<JobBulkImportPage />} />
+            <Route path="jobs/imports/:batchId" element={<JobBatchReviewPage />} />
             <Route path="jobs/:id/edit" element={<JobOpsEditor />} />
             <Route path="jobs/:id/preview" element={<JobOpsPreview />} />
+            
+            {/* Recruiter-Only Talent Pool Workspace */}
+            <Route element={<RoleRoute allowedRoles={['recruiter']} />}>
+              <Route path="talent" element={<TalentPoolSearchPage />} />
+              <Route path="talent/:candidateId" element={<TalentCandidateDetailPage />} />
+            </Route>
           </Route>
         </Route>
       </Routes>

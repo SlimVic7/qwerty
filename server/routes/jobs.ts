@@ -116,6 +116,7 @@ jobsRouter.post('/', requireAuth, requireRole(['editor', 'admin', 'super_admin']
 
   const validationError = validateJobData(jobData, true);
   if (validationError) {
+    console.warn("Job create validation failed:", validationError);
     res.status(400).json({ error: validationError });
     return;
   }
@@ -139,8 +140,8 @@ jobsRouter.post('/', requireAuth, requireRole(['editor', 'admin', 'super_admin']
     p_requirements: jobData.requirements || null,
     p_preferred_qualifications: jobData.preferred_qualifications || null,
     p_benefits: jobData.benefits || null,
-    p_salary_min: jobData.salary_min !== undefined ? Number(jobData.salary_min) : null,
-    p_salary_max: jobData.salary_max !== undefined ? Number(jobData.salary_max) : null,
+    p_salary_min: (jobData.salary_min !== undefined && jobData.salary_min !== null) ? Number(jobData.salary_min) : null,
+    p_salary_max: (jobData.salary_max !== undefined && jobData.salary_max !== null) ? Number(jobData.salary_max) : null,
     p_salary_currency: jobData.salary_currency || null,
     p_salary_period: jobData.salary_period || null,
     p_application_url: jobData.application_url || null,

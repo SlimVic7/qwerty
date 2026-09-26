@@ -1,0 +1,382 @@
+     1	import React, { useState, useEffect } from 'react';
+     2	import { useParams, useNavigate } from 'react-router-dom';
+     3	import { jobsOpsService } from './jobsOps.service.js';
+     4	import { useAuth } from '../../../lib/auth.js';
+     5	
+     6	export function JobOpsEditor() {
+     7	  const { id } = useParams<{ id: string }>();
+     8	  const navigate = useNavigate();
+     9	  const { roles } = useAuth();
+    10	  
+    11	  const [job, setJob] = useState<any>(null);
+    12	  const [loading, setLoading] = useState(true);
+    13	  const [saving, setSaving] = useState(false);
+    14	  const [error, setError] = useState('');
+    15	  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+    16	  const [confirmAction, setConfirmAction] = useState<'publish' | 'unpublish' | 'close' | 'archive' | 'feature' | 'unfeature' | null>(null);
+    17	
+    18	  const showNotification = (message: string, type: 'success' | 'error') => {
+    19	    setNotification({ message, type });
+    20	    setTimeout(() => setNotification(null), 5000);
+    21	  };
+    22	
+    23	  const isAdmin = roles.includes('admin') || roles.includes('super_admin');
+    24	
+    25	  useEffect(() => {
+    26	    if (id === 'undefined') {
+    27	      setError('Unable to determine this job record. Please return to the jobs list and try again.');
+    28	      setLoading(false);
+    29	    } else if (id) {
+    30	      loadJob(id);
+    31	    } else {
+    32	      setJob({
+    33	        title: '',
+    34	        company_name: '',
+    35	        company_logo_url: '',
+    36	        location_text: '',
+    37	        country: '',
+    38	        city: '',
+    39	        workplace_type: 'unspecified',
+    40	        employment_type: 'unspecified',
+    41	        experience_level: '',
+    42	        description: '',
+    43	        responsibilities: '',
+    44	        requirements: '',
+    45	        preferred_qualifications: '',
+    46	        benefits: '',
+    47	        salary_min: '',
+    48	        salary_max: '',
+    49	        salary_currency: 'USD',
+    50	        salary_period: 'yearly',
+    51	        application_url: '',
+    52	        application_email: '',
+    53	        source_name: '',
+    54	        source_url: '',
+    55	        application_deadline: '',
+    56	        status: 'draft'
+    57	      });
+    58	      setLoading(false);
+    59	    }
+    60	  }, [id]);
+    61	
+    62	  const loadJob = async (jobId: string) => {
+    63	    try {
+    64	      const data = await jobsOpsService.getJob(jobId);
+    65	      setJob(data);
+    66	    } catch (err: any) {
+    67	      setError(err.message);
+    68	    } finally {
+    69	      setLoading(false);
+    70	    }
+    71	  };
+    72	
+    73	  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    74	    const { name, value, type } = e.target;
+    75	    setJob((prev: any) => ({
+    76	      ...prev,
+    77	      [name]: type === 'number' ? (value === '' ? null : Number(value)) : value
+    78	    }));
+    79	  };
+    80	
+    81	  const handleSave = async (e: React.FormEvent) => {
+    82	    e.preventDefault();
+    83	    setSaving(true);
+    84	    try {
+    85	      if (id) {
+    86	        await jobsOpsService.updateDraft(id, job);
+    87	        showNotification('Saved successfully', 'success');
+    88	        loadJob(id);
+    89	      } else {
+    90	        const newJob = await jobsOpsService.createDraft(job);
+    91	        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    92	        if (!newJob || !newJob.id || !uuidRegex.test(newJob.id)) {
+    93	          throw new Error('Server returned invalid job UUID upon creation');
+    94	        }
+    95	        showNotification('Created successfully', 'success');
+    96	        navigate(`/0ps26/jobs/${newJob.id}/edit`);
+    97	      }
+    98	    } catch (err: any) {
+    99	      showNotification(err.message || 'Failed to save', 'error');
+   100	    } finally {
+   101	      setSaving(false);
+   102	    }
+   103	  };
+   104	
+   105	  const requestLifecycleAction = (action: 'publish' | 'unpublish' | 'close' | 'archive' | 'feature' | 'unfeature') => {
+   106	    if (!isAdmin) return;
+   107	    if (!job.id || job.id === 'undefined') {
+   108	      showNotification('Unable to determine this job record. Please return to the jobs list and try again.', 'error');
+   109	      return;
+   110	    }
+   111	    setConfirmAction(action);
+   112	  };
+   113	
+   114	  const executeLifecycle = async () => {
+   115	    if (!confirmAction || !job.id) return;
+   116	    const action = confirmAction;
+   117	    setConfirmAction(null);
+   118	    setSaving(true);
+   119	    try {
+   120	      if (action === 'publish') await jobsOpsService.publishJob(job.id);
+   121	      else if (action === 'unpublish') await jobsOpsService.unpublishJob(job.id);
+   122	      else if (action === 'close') await jobsOpsService.closeJob(job.id);
+   123	      else if (action === 'archive') await jobsOpsService.archiveJob(job.id);
+   124	      else if (action === 'feature') await jobsOpsService.featureJob(job.id);
+   125	      else if (action === 'unfeature') await jobsOpsService.unfeatureJob(job.id);
+   126	      
+   127	      await loadJob(job.id);
+   128	      showNotification(`Job successfully ${action}ed`, 'success');
+   129	    } catch (err: any) {
+   130	      console.error(err);
+   131	      showNotification(`Unable to ${action} this job. Please try again.`, 'error');
+   132	    } finally {
+   133	      setSaving(false);
+   134	    }
+   135	  };
+   136	
+   137	  if (loading) return <div className="p-8">Loading...</div>;
+   138	  if (error) return <div className="p-8 text-red-600">Error: {error}</div>;
+   139	  if (!job) return <div className="p-8">Job not found.</div>;
+   140	
+   141	  return (
+   142	    <>
+   143	    <div className="max-w-4xl mx-auto p-4 md:p-8">
+   144	      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+   145	        <div>
+   146	          <h1 className="text-2xl font-bold text-slate-900">{id ? `Edit Job: ${job.title}` : 'New Job'}</h1>
+   147	          <div className="text-sm text-slate-500 mt-1">Status: <span className="font-semibold uppercase">{job.status}</span></div>
+   148	        </div>
+   149	        
+   150	        <div className="flex flex-wrap gap-2">
+   151	          <button 
+   152	            onClick={() => navigate('/0ps26/jobs')}
+   153	            className="px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 font-medium"
+   154	          >
+   155	            Back
+   156	          </button>
+   157	          
+   158	          <button 
+   159	            onClick={handleSave}
+   160	            disabled={saving}
+   161	            className="px-4 py-2 bg-[#0B3D2E] text-white rounded hover:bg-[#155a44] font-medium disabled:opacity-50"
+   162	          >
+   163	            {saving ? 'Saving...' : 'Save Changes'}
+   164	          </button>
+   165	        </div>
+   166	      </div>
+   167	
+   168	      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   169	        <form onSubmit={handleSave} className="lg:col-span-2 space-y-6">
+   170	          <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+   171	            <h2 className="text-lg font-bold mb-4">Basic Information</h2>
+   172	            <div className="space-y-4">
+   173	              <div>
+   174	                <label className="block text-sm font-medium mb-1">Title *</label>
+   175	                <input required type="text" name="title" value={job.title || ''} onChange={handleChange} className="w-full border rounded p-2" />
+   176	              </div>
+   177	              <div>
+   178	                <label className="block text-sm font-medium mb-1">Company Name *</label>
+   179	                <input required type="text" name="company_name" value={job.company_name || ''} onChange={handleChange} className="w-full border rounded p-2" />
+   180	              </div>
+   181	              <div>
+   182	                <label className="block text-sm font-medium mb-1">Company Logo URL</label>
+   183	                <input type="url" name="company_logo_url" value={job.company_logo_url || ''} onChange={handleChange} className="w-full border rounded p-2" />
+   184	              </div>
+   185	            </div>
+   186	          </div>
+   187	
+   188	          <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+   189	            <h2 className="text-lg font-bold mb-4">Location & Work Arrangement</h2>
+   190	            <div className="space-y-4">
+   191	              <div>
+   192	                <label className="block text-sm font-medium mb-1">Location Text</label>
+   193	                <input type="text" name="location_text" value={job.location_text || ''} onChange={handleChange} className="w-full border rounded p-2" />
+   194	              </div>
+   195	              <div className="grid grid-cols-2 gap-4">
+   196	                <div>
+   197	                  <label className="block text-sm font-medium mb-1">City</label>
+   198	                  <input type="text" name="city" value={job.city || ''} onChange={handleChange} className="w-full border rounded p-2" />
+   199	                </div>
+   200	                <div>
+   201	                  <label className="block text-sm font-medium mb-1">Country</label>
+   202	                  <input type="text" name="country" value={job.country || ''} onChange={handleChange} className="w-full border rounded p-2" />
+   203	                </div>
+   204	              </div>
+   205	              <div className="grid grid-cols-2 gap-4">
+   206	                <div>
+   207	                  <label className="block text-sm font-medium mb-1">Workplace Type</label>
+   208	                  <select name="workplace_type" value={job.workplace_type || 'unspecified'} onChange={handleChange} className="w-full border rounded p-2">
+   209	                    <option value="unspecified">Unspecified</option>
+   210	                    <option value="onsite">On-site</option>
+   211	                    <option value="hybrid">Hybrid</option>
+   212	                    <option value="remote">Remote</option>
+   213	                  </select>
+   214	                </div>
+   215	                <div>
+   216	                  <label className="block text-sm font-medium mb-1">Employment Type</label>
+   217	                  <select name="employment_type" value={job.employment_type || 'unspecified'} onChange={handleChange} className="w-full border rounded p-2">
+   218	                    <option value="unspecified">Unspecified</option>
+   219	                    <option value="full_time">Full-time</option>
+   220	                    <option value="part_time">Part-time</option>
+   221	                    <option value="contract">Contract</option>
+   222	                    <option value="internship">Internship</option>
+   223	                    <option value="temporary">Temporary</option>
+   224	                    <option value="volunteer">Volunteer</option>
+   225	                  </select>
+   226	                </div>
+   227	              </div>
+   228	            </div>
+   229	          </div>
+   230	
+   231	          <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+   232	            <h2 className="text-lg font-bold mb-4">Job Details</h2>
+   233	            <div className="space-y-4">
+   234	              <div>
+   235	                <label className="block text-sm font-medium mb-1">Experience Level</label>
+   236	                <input type="text" name="experience_level" value={job.experience_level || ''} onChange={handleChange} className="w-full border rounded p-2" />
+   237	              </div>
+   238	              <div>
+   239	                <label className="block text-sm font-medium mb-1">Description *</label>
+   240	                <textarea required name="description" value={job.description || ''} onChange={handleChange} rows={6} className="w-full border rounded p-2" />
+   241	              </div>
+   242	              <div>
+   243	                <label className="block text-sm font-medium mb-1">Responsibilities</label>
+   244	                <textarea name="responsibilities" value={job.responsibilities || ''} onChange={handleChange} rows={4} className="w-full border rounded p-2" />
+   245	              </div>
+   246	              <div>
+   247	                <label className="block text-sm font-medium mb-1">Requirements</label>
+   248	                <textarea name="requirements" value={job.requirements || ''} onChange={handleChange} rows={4} className="w-full border rounded p-2" />
+   249	              </div>
+   250	              <div>
+   251	                <label className="block text-sm font-medium mb-1">Preferred Qualifications</label>
+   252	                <textarea name="preferred_qualifications" value={job.preferred_qualifications || ''} onChange={handleChange} rows={3} className="w-full border rounded p-2" />
+   253	              </div>
+   254	              <div>
+   255	                <label className="block text-sm font-medium mb-1">Benefits</label>
+   256	                <textarea name="benefits" value={job.benefits || ''} onChange={handleChange} rows={3} className="w-full border rounded p-2" />
+   257	              </div>
+   258	            </div>
+   259	          </div>
+   260	
+   261	          <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+   262	            <h2 className="text-lg font-bold mb-4">Compensation & Application</h2>
+   263	            <div className="space-y-4">
+   264	              <div className="grid grid-cols-2 gap-4">
+   265	                <div>
+   266	                  <label className="block text-sm font-medium mb-1">Salary Min</label>
+   267	                  <input type="number" name="salary_min" value={job.salary_min || ''} onChange={handleChange} className="w-full border rounded p-2" min="0" />
+   268	                </div>
+   269	                <div>
+   270	                  <label className="block text-sm font-medium mb-1">Salary Max</label>
+   271	                  <input type="number" name="salary_max" value={job.salary_max || ''} onChange={handleChange} className="w-full border rounded p-2" min="0" />
+   272	                </div>
+   273	              </div>
+   274	              <div className="grid grid-cols-2 gap-4">
+   275	                <div>
+   276	                  <label className="block text-sm font-medium mb-1">Currency (e.g. USD)</label>
+   277	                  <input type="text" name="salary_currency" value={job.salary_currency || ''} onChange={handleChange} className="w-full border rounded p-2" />
+   278	                </div>
+   279	                <div>
+   280	                  <label className="block text-sm font-medium mb-1">Period (e.g. year, hour)</label>
+   281	                  <input type="text" name="salary_period" value={job.salary_period || ''} onChange={handleChange} className="w-full border rounded p-2" />
+   282	                </div>
+   283	              </div>
+   284	              
+   285	              <div className="pt-4 border-t">
+   286	                <div>
+   287	                  <label className="block text-sm font-medium mb-1">Application URL</label>
+   288	                  <input type="url" name="application_url" value={job.application_url || ''} onChange={handleChange} className="w-full border rounded p-2" />
+   289	                </div>
+   290	                <div className="mt-4">
+   291	                  <label className="block text-sm font-medium mb-1">Application Email</label>
+   292	                  <input type="email" name="application_email" value={job.application_email || ''} onChange={handleChange} className="w-full border rounded p-2" />
+   293	                </div>
+   294	                <div className="mt-4">
+   295	                  <label className="block text-sm font-medium mb-1">Deadline</label>
+   296	                  <input type="datetime-local" name="application_deadline" value={job.application_deadline ? new Date(job.application_deadline).toISOString().slice(0,16) : ''} onChange={(e) => {
+   297	                    const date = e.target.value ? new Date(e.target.value).toISOString() : null;
+   298	                    setJob((prev: any) => ({ ...prev, application_deadline: date }));
+   299	                  }} className="w-full border rounded p-2" />
+   300	                </div>
+   301	              </div>
+   302	            </div>
+   303	          </div>
+   304	        </form>
+   305	
+   306	        <div className="lg:col-span-1 space-y-6">
+   307	          {/* Admin Lifecycle Controls */}
+   308	          {isAdmin && job.id && (
+   309	            <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+   310	              <h2 className="text-lg font-bold mb-4">Publishing & Lifecycle</h2>
+   311	              <div className="flex flex-col gap-3">
+   312	                {job.status === 'draft' && (
+   313	                  <>
+   314	                    <button type="button" onClick={() => requestLifecycleAction('publish')} disabled={saving} className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 disabled:opacity-50 font-medium">Publish Job</button>
+   315	                    <button type="button" onClick={() => requestLifecycleAction('archive')} disabled={saving} className="w-full bg-red-600 text-white p-2 rounded hover:bg-red-700 disabled:opacity-50 font-medium">Archive Job</button>
+   316	                  </>
+   317	                )}
+   318	                {job.status === 'published' && (
+   319	                  <>
+   320	                    <button type="button" onClick={() => requestLifecycleAction('unpublish')} disabled={saving} className="w-full bg-orange-500 text-white p-2 rounded hover:bg-orange-600 disabled:opacity-50 font-medium">Unpublish to Draft</button>
+   321	                    <button type="button" onClick={() => requestLifecycleAction('close')} disabled={saving} className="w-full bg-slate-600 text-white p-2 rounded hover:bg-slate-700 disabled:opacity-50 font-medium">Close Job</button>
+   322	                    <hr className="my-2" />
+   323	                    {job.featured ? (
+   324	                      <button type="button" onClick={() => requestLifecycleAction('unfeature')} disabled={saving} className="w-full border border-yellow-500 text-yellow-600 p-2 rounded hover:bg-yellow-50 disabled:opacity-50 font-medium">Remove Feature</button>
+   325	                    ) : (
+   326	                      <button type="button" onClick={() => requestLifecycleAction('feature')} disabled={saving} className="w-full bg-yellow-500 text-white p-2 rounded hover:bg-yellow-600 disabled:opacity-50 font-medium">Mark as Featured</button>
+   327	                    )}
+   328	                  </>
+   329	                )}
+   330	                {job.status === 'closed' && (
+   331	                  <button type="button" onClick={() => requestLifecycleAction('archive')} disabled={saving} className="w-full bg-red-600 text-white p-2 rounded hover:bg-red-700 disabled:opacity-50 font-medium">Archive Job</button>
+   332	                )}
+   333	                {job.status === 'archived' && (
+   334	                  <button type="button" disabled className="w-full bg-slate-200 text-slate-400 p-2 rounded font-medium cursor-not-allowed">Archived (No actions available)</button>
+   335	                )}
+   336	              </div>
+   337	            </div>
+   338	          )}
+   339	          
+   340	          {job.id && (
+   341	          <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+   342	            <h2 className="text-lg font-bold mb-4">Preview</h2>
+   343	            <p className="text-sm text-slate-600 mb-4">View how this job will appear to public users. Draft previews are private.</p>
+   344	            {/* Note: In a real app, this might open a modal or dedicated preview route. For now, link to the public URL but maybe they can only see it if they are an admin via the public route, or we add an internal preview mode. We'll link to a specific preview route if needed, but per requirements we just need to provide a preview mechanism. Let's just make it a link to /jobs/:slug but the public route only shows published jobs! So we need an internal preview route or parameter. Or the public route itself can bypass the status='published' check if the user is an admin? Wait, the public service `getPublishedJobBySlug` explicitly restricts to 'published'. To fulfill "A draft preview must remain private", we should either render the JobDetailPage component inside a preview wrapper, or just pass a preview flag to it. */}
+   345	            <a href={`/0ps26/jobs/${job.id}/preview`} className="w-full inline-block text-center border border-slate-300 text-slate-700 p-2 rounded hover:bg-slate-50 font-medium">
+   346	              View Private Preview
+   347	            </a>
+   348	          </div>
+   349	          )}
+   350	        </div>
+   351	      </div>
+   352	    </div>
+   353	      {notification && (
+   354	        <div className={`fixed bottom-4 right-4 p-4 rounded shadow-lg text-white font-medium z-50 ${notification.type === 'error' ? 'bg-red-600' : 'bg-green-600'}`}>
+   355	          {notification.message}
+   356	        </div>
+   357	      )}
+   358	      {confirmAction && (
+   359	        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+   360	          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
+   361	            <h3 className="text-xl font-bold mb-4 capitalize">{confirmAction} Job?</h3>
+   362	            <p className="text-slate-600 mb-6">
+   363	              {confirmAction === 'archive' && 'This job will no longer be available for editing or publishing.'}
+   364	              {confirmAction === 'publish' && 'This job will be visible to public users.'}
+   365	              {confirmAction === 'unpublish' && 'This job will be moved back to draft and hidden from the public.'}
+   366	              {confirmAction === 'close' && 'This job will be closed and no longer accept applications.'}
+   367	              {(confirmAction === 'feature' || confirmAction === 'unfeature') && `Are you sure you want to ${confirmAction} this job?`}
+   368	            </p>
+   369	            <div className="flex justify-end gap-3">
+   370	              <button type="button" onClick={() => setConfirmAction(null)} className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded">
+   371	                Cancel
+   372	              </button>
+   373	              <button type="button" onClick={executeLifecycle} className="px-4 py-2 font-medium bg-blue-600 hover:bg-blue-700 text-white rounded capitalize">
+   374	                {confirmAction} Job
+   375	              </button>
+   376	            </div>
+   377	          </div>
+   378	        </div>
+   379	      )}
+   380	    </>
+   381	  );
+   382	}

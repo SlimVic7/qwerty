@@ -15,3 +15,17 @@ export const getAdminClient = () => {
     },
   });
 };
+
+export const getAuthClient = (authHeader: string) => {
+  return createClient(env.SUPABASE_URL || '', process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '', {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    global: {
+      headers: {
+        Authorization: authHeader,
+      },
+    },
+  });
+};
