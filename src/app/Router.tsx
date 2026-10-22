@@ -23,6 +23,7 @@ import { CandidateDashboardPage } from '../features/dashboard/CandidateDashboard
 import { CareerHubPage } from '../features/career/CareerHubPage.js';
 import { CareerRoleLibraryPage } from '../features/career/CareerRoleLibraryPage.js';
 import { CareerRoleDetailPage } from '../features/career/CareerRoleDetailPage.js';
+import { CandidateCareerCoachPage } from '../features/career/CandidateCareerCoachPage.js';
 import { useParams } from 'react-router-dom';
 
 function CareerRoleSlugRedirect() {
@@ -75,11 +76,13 @@ export function Router() {
             <Route index element={<CandidateDashboardPage />} />
             <Route path="dashboard" element={<CandidateDashboardPage />} />
             <Route path="career" element={<CareerHubPage />} />
+            <Route path="career/coach" element={<CandidateCareerCoachPage />} />
             <Route path="career/roles" element={<CareerRoleLibraryPage />} />
             <Route path="career/roles/:slug" element={<CareerRoleDetailPage />} />
             <Route path="career/roles/:slug/roadmap" element={<CareerRoleDetailPage />} />
             <Route path="career/roles/:slug/courses" element={<CareerRoleDetailPage />} />
             <Route path="career/roles/:slug/plan" element={<CareerRoleDetailPage />} />
+            <Route path="career/roles/:slug/coach" element={<CandidateCareerCoachPage />} />
             <Route path="profile" element={<CandidateProfilePage />} />
             <Route path="saved-jobs" element={<SavedJobsPage />} />
             <Route path="job-alerts" element={<JobAlertsPage />} />

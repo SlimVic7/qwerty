@@ -33,9 +33,10 @@ export function CandidateLayout() {
 
   const navLinks = [
     { to: '/candidate/dashboard', label: 'Dashboard' },
+    { to: '/candidate/career', label: 'Career Hub' },
+    { to: '/candidate/career/coach', label: 'AI Career Coach' },
     { to: '/candidate/saved-jobs', label: 'Saved Jobs' },
     { to: '/candidate/job-alerts', label: 'Job Alerts' },
-    { to: '/candidate/career', label: 'Career Hub' },
     { to: '/candidate/profile', label: 'Profile' },
   ];
 
