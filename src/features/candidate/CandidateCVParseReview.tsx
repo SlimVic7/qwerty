@@ -18,6 +18,16 @@ export function CandidateCVParseReview({ cvId, onApplied }: CandidateCVParseRevi
     fetchParse();
   }, [cvId]);
 
+  // Auto-poll when parsing is actively processing
+  useEffect(() => {
+    if (parse && ['pending', 'extracting_text', 'processing'].includes(parse.status)) {
+      const timer = setTimeout(() => {
+        fetchParse();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [parse?.status]);
+
   const fetchParse = async () => {
     setLoading(true);
     setError(null);
@@ -58,11 +68,12 @@ export function CandidateCVParseReview({ cvId, onApplied }: CandidateCVParseRevi
     }
   };
 
-  const startParse = async () => {
+  const startParse = async (isRetry = false) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await authFetch(`/api/candidate/cvs/${cvId}/parse`, { method: 'POST' });
+      const url = isRetry ? `/api/candidate/cvs/${cvId}/parse?retry=true` : `/api/candidate/cvs/${cvId}/parse`;
+      const data = await authFetch(url, { method: 'POST' });
       setParse(data);
       if (data?.extracted_data) {
         setEditedData(JSON.parse(JSON.stringify(data.extracted_data)));
@@ -137,14 +148,14 @@ export function CandidateCVParseReview({ cvId, onApplied }: CandidateCVParseRevi
   };
 
   if (loading) {
-    return <div className="text-sm text-neutral-500">Checking CV analysis status...</div>;
+    return <div className="text-xs sm:text-sm text-neutral-500 py-2">Checking CV analysis status...</div>;
   }
 
   if (error) {
     return (
       <div className="bg-red-50 p-4 rounded-lg border border-red-200 mt-4">
         <p className="text-red-700 text-sm font-medium">{error}</p>
-        <button onClick={fetchParse} className="mt-2 text-sm text-red-600 hover:underline">Retry</button>
+        <button onClick={fetchParse} className="mt-2 text-sm text-red-600 hover:underline font-medium">Retry</button>
       </div>
     );
   }
@@ -152,7 +163,7 @@ export function CandidateCVParseReview({ cvId, onApplied }: CandidateCVParseRevi
   if (!parse) {
     return (
       <div className="mt-4">
-        <button onClick={startParse} className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md text-sm">
+        <button onClick={() => startParse(false)} className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md text-sm transition-colors">
           Analyse CV
         </button>
         <p className="text-xs text-neutral-500 mt-1">Extract profile information automatically.</p>
@@ -161,11 +172,17 @@ export function CandidateCVParseReview({ cvId, onApplied }: CandidateCVParseRevi
   }
 
   if (parse.status === 'failed') {
+    const getFailureMessage = (code: string) => {
+      if (code === 'OCR_REQUIRED') return 'Scanned or image-based CV detected. Please upload a text-based PDF or DOCX file.';
+      if (code === 'UNSUPPORTED_DOCUMENT') return 'Unsupported document format. Please upload a PDF or DOCX file.';
+      return "We couldn't finish processing your CV yet. You can retry.";
+    };
+
     return (
-      <div className="bg-red-50 p-4 rounded-lg border border-red-200 mt-4">
-        <h4 className="text-red-800 font-semibold mb-1">Analysis Failed</h4>
-        <p className="text-red-600 text-sm mb-3">Reason: {parse.error_code || 'Unknown Error'}</p>
-        <button onClick={() => authFetch(`/api/candidate/cvs/${cvId}/parse?retry=true`, { method: 'POST' }).then(fetchParse).catch(e => setError(e.message))} className="bg-white border border-red-300 text-red-700 font-medium py-1.5 px-3 rounded-md text-sm">
+      <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 mt-4">
+        <h4 className="text-amber-800 font-semibold mb-1 text-sm sm:text-base">Processing Not Completed</h4>
+        <p className="text-amber-700 text-xs sm:text-sm mb-3">{getFailureMessage(parse.error_code)}</p>
+        <button onClick={() => startParse(true)} className="bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 font-medium py-1.5 px-3 rounded-md text-xs sm:text-sm transition-colors">
           Retry Analysis
         </button>
       </div>
@@ -174,12 +191,15 @@ export function CandidateCVParseReview({ cvId, onApplied }: CandidateCVParseRevi
 
   if (['pending', 'extracting_text', 'processing'].includes(parse.status)) {
     return (
-      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mt-4 flex items-center justify-between">
-        <div>
-          <h4 className="text-blue-800 font-semibold">Analysing CV...</h4>
-          <p className="text-blue-600 text-sm">Extracting structured data.</p>
+      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mt-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" />
+          <div>
+            <h4 className="text-blue-800 font-semibold text-xs sm:text-sm">Analysing CV...</h4>
+            <p className="text-blue-600 text-xs">Extracting structured profile data automatically.</p>
+          </div>
         </div>
-        <button onClick={fetchParse} className="text-sm text-blue-700 hover:underline">Refresh</button>
+        <button onClick={fetchParse} className="text-xs sm:text-sm text-blue-700 hover:underline font-medium shrink-0">Refresh</button>
       </div>
     );
   }

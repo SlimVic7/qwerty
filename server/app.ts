@@ -12,9 +12,15 @@ import { candidateRouter } from './routes/candidate.js';
 import { cvParsingRouter } from './routes/cvParsing.js';
 import { talentPoolRouter } from './routes/talentPool.js';
 import { careerRouter } from './routes/career.js';
+import { processPendingCvParses } from './services/cv/cvParsingService.js';
 
 export function createExpressApp(): express.Express {
   const app = express();
+
+  // On app startup, trigger background recovery sweeper for durable pending CV parses
+  processPendingCvParses().catch((err) => {
+    console.warn('[CV_PARSER_RECOVERY_INIT] Recovery check completed:', err);
+  });
 
   // CORS & Preflight handling for browser and iframe API requests
   app.use((req, res, next) => {

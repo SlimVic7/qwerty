@@ -23,6 +23,7 @@ import { SavedJobsStore } from '../services/savedJobs/savedJobsStore.js';
 import { OutboundApplyStore } from '../services/jobSource/outboundApplyStore.js';
 import { JobAlertsStore } from '../services/jobAlerts/jobAlertsStore.js';
 import { CandidateDashboardStore } from '../services/dashboard/candidateDashboardStore.js';
+import { getOrStartCvParse } from '../services/cv/cvParsingService.js';
 
 
 function validateMagicBytes(buffer: Buffer): { valid: boolean, format: string | null } {
@@ -361,6 +362,15 @@ candidateRouter.post('/cvs', upload.single('cvFile'), async (req, res) => {
       console.error('[METADATA_RPC] Database insert error, rolling back storage:', JSON.stringify(insertError, null, 2));
       await supabase.storage.from('candidate-cvs').remove([storagePath]);
       return res.status(500).json({ message: 'Failed to save CV record' });
+    }
+
+    // 3. Automatically trigger initial CV parse job asynchronously
+    try {
+      if (newCv?.id) {
+        await getOrStartCvParse(newCv.id, userId);
+      }
+    } catch (parseInitErr) {
+      console.warn('[CV_UPLOAD] Note: Auto-trigger parse deferral:', parseInitErr);
     }
 
     res.status(201).json(newCv);
