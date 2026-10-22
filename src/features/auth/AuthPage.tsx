@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase.js';
 
 const EMAIL_OTP_LENGTH = 6;
@@ -10,6 +10,10 @@ type OtpState = 'email' | 'verify';
 
 export function AuthPage({ defaultMode = 'signin' }: { defaultMode?: AuthMode }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const returnTo = (location.state as any)?.from || searchParams.get('returnTo') || '/candidate';
+
   const [mode, setMode] = useState<AuthMode>(defaultMode);
   const [method, setMethod] = useState<Method>('otp');
   const [otpState, setOtpState] = useState<OtpState>('email');
@@ -87,7 +91,7 @@ export function AuthPage({ defaultMode = 'signin' }: { defaultMode?: AuthMode })
       if (error) throw error;
       
       if (data.session) {
-        navigate('/candidate');
+        navigate(returnTo);
       }
     } catch (error: any) {
       handleError(error, "Invalid or expired code. Please try again.");
@@ -121,7 +125,7 @@ export function AuthPage({ defaultMode = 'signin' }: { defaultMode?: AuthMode })
           setOtpState('verify');
           setMessage({ text: `Registration successful! Please enter the ${EMAIL_OTP_LENGTH}-digit code sent to your email to confirm.`, type: 'success' });
         } else if (data.session) {
-          navigate('/candidate');
+          navigate(returnTo);
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -131,7 +135,7 @@ export function AuthPage({ defaultMode = 'signin' }: { defaultMode?: AuthMode })
         if (error) throw error;
         
         if (data.session) {
-          navigate('/candidate');
+          navigate(returnTo);
         }
       }
     } catch (error: any) {

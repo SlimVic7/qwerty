@@ -19,6 +19,10 @@ import {
   buildAlignmentHistoryResponse,
   buildAlignmentComparisonResponse
 } from '../services/alignmentHistory/alignmentHistoryEngine.js';
+import { SavedJobsStore } from '../services/savedJobs/savedJobsStore.js';
+import { OutboundApplyStore } from '../services/jobSource/outboundApplyStore.js';
+import { JobAlertsStore } from '../services/jobAlerts/jobAlertsStore.js';
+import { CandidateDashboardStore } from '../services/dashboard/candidateDashboardStore.js';
 
 
 function validateMagicBytes(buffer: Buffer): { valid: boolean, format: string | null } {
@@ -1442,4 +1446,305 @@ candidateRouter.post('/tailoring/:sessionId/finalize', async (req, res) => {
     res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to finalize tailored CV' });
   }
 });
+
+// ----------------------------------------------------
+// Stage 6.1 — Saved Jobs Endpoints
+// ----------------------------------------------------
+
+/**
+ * POST /api/candidate/jobs/:jobId/save
+ * Saves a published job for the authenticated candidate. Idempotent.
+ */
+candidateRouter.post('/jobs/:jobId/save', requireAuth, requireRole(['candidate']), async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const { jobId } = req.params;
+
+    if (!SavedJobsStore.isValidUuid(jobId)) {
+      return res.status(400).json({ error: 'INVALID_JOB_ID', message: 'Job ID must be a valid UUID' });
+    }
+
+    const result = await SavedJobsStore.saveJob(userId, jobId);
+    return res.status(200).json(result);
+  } catch (error: any) {
+    if (error.message === 'JOB_NOT_FOUND') {
+      return res.status(404).json({ error: 'JOB_NOT_FOUND', message: 'Job does not exist.' });
+    }
+    if (error.message === 'JOB_NOT_AVAILABLE') {
+      return res.status(400).json({ error: 'JOB_NOT_AVAILABLE', message: 'Only active published jobs can be saved.' });
+    }
+    console.error('[SAVED_JOBS] Error saving job:', error);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to save job.' });
+  }
+});
+
+/**
+ * DELETE /api/candidate/jobs/:jobId/save
+ * Unsaves a job for the authenticated candidate. Idempotent.
+ */
+candidateRouter.delete('/jobs/:jobId/save', requireAuth, requireRole(['candidate']), async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const { jobId } = req.params;
+
+    if (!SavedJobsStore.isValidUuid(jobId)) {
+      return res.status(400).json({ error: 'INVALID_JOB_ID', message: 'Job ID must be a valid UUID' });
+    }
+
+    const result = await SavedJobsStore.unsaveJob(userId, jobId);
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.error('[SAVED_JOBS] Error unsaving job:', error);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to unsave job.' });
+  }
+});
+
+/**
+ * GET /api/candidate/jobs/:jobId/saved-status
+ * Checks if a job is saved by the authenticated candidate.
+ */
+candidateRouter.get('/jobs/:jobId/saved-status', requireAuth, requireRole(['candidate']), async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const { jobId } = req.params;
+
+    if (!SavedJobsStore.isValidUuid(jobId)) {
+      return res.status(400).json({ error: 'INVALID_JOB_ID', message: 'Job ID must be a valid UUID' });
+    }
+
+    const result = await SavedJobsStore.getSavedStatus(userId, jobId);
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.error('[SAVED_JOBS] Error checking saved status:', error);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to retrieve saved status.' });
+  }
+});
+
+/**
+ * GET /api/candidate/saved-jobs
+ * Lists candidate-owned saved jobs with pagination.
+ */
+candidateRouter.get('/saved-jobs', requireAuth, requireRole(['candidate']), async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+    const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
+
+    const result = await SavedJobsStore.listSavedJobs(userId, { limit, offset });
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.error('[SAVED_JOBS] Error listing saved jobs:', error);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to retrieve saved jobs.' });
+  }
+});
+
+/**
+ * POST /api/candidate/jobs/:jobId/outbound-apply
+ * Authenticates candidate, validates job eligibility and safe apply URL,
+ * records outbound_apply_click intent event, and returns server-controlled destination.
+ * Rejects arbitrary browser redirect payloads.
+ */
+candidateRouter.post('/jobs/:jobId/outbound-apply', requireAuth, requireRole(['candidate']), async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const { jobId } = req.params;
+
+    if (!OutboundApplyStore.isValidUuid(jobId)) {
+      return res.status(400).json({ error: 'INVALID_JOB_ID', message: 'Job ID must be a valid UUID' });
+    }
+
+    const result = await OutboundApplyStore.processOutboundApply(userId, jobId);
+    return res.status(200).json(result);
+  } catch (error: any) {
+    if (error.message === 'JOB_NOT_FOUND') {
+      return res.status(404).json({ error: 'JOB_NOT_FOUND', message: 'Job does not exist.' });
+    }
+    if (error.message === 'JOB_NOT_ELIGIBLE_FOR_APPLY') {
+      return res.status(400).json({ error: 'JOB_NOT_ELIGIBLE_FOR_APPLY', message: 'This job is not currently open for applications.' });
+    }
+    if (error.message === 'QWERTY_DIRECT_APPLICATIONS_UNAVAILABLE') {
+      return res.status(400).json({ error: 'QWERTY_DIRECT_APPLICATIONS_UNAVAILABLE', message: 'Direct applications on QWERTY are not available at this time.' });
+    }
+    if (error.message === 'APPLICATION_LINK_UNAVAILABLE') {
+      return res.status(400).json({ error: 'APPLICATION_LINK_UNAVAILABLE', message: 'Application link is currently unavailable for this job.' });
+    }
+    console.error('[OUTBOUND_APPLY] Error processing outbound apply:', error);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to process outbound apply request.' });
+  }
+});
+
+// ----------------------------------------------------
+// STAGE 6.3: CANDIDATE JOB ALERTS
+// ----------------------------------------------------
+
+/**
+ * GET /api/candidate/job-alerts
+ * Lists candidate-owned job alerts.
+ */
+candidateRouter.get('/job-alerts', requireAuth, requireRole(['candidate']), async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const alerts = await JobAlertsStore.listAlerts(userId);
+    return res.status(200).json({ alerts, total: alerts.length });
+  } catch (error: any) {
+    console.error('[JOB_ALERTS] List error:', error);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to retrieve job alerts.' });
+  }
+});
+
+/**
+ * POST /api/candidate/job-alerts
+ * Creates a new candidate job alert.
+ */
+candidateRouter.post('/job-alerts', requireAuth, requireRole(['candidate']), async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const alert = await JobAlertsStore.createAlert(userId, req.body);
+    return res.status(201).json(alert);
+  } catch (error: any) {
+    if (error.message === 'INVALID_ALERT_NAME') {
+      return res.status(400).json({ error: 'INVALID_ALERT_NAME', message: 'Alert name is required.' });
+    }
+    if (error.message === 'ALERT_NAME_TOO_LONG') {
+      return res.status(400).json({ error: 'ALERT_NAME_TOO_LONG', message: 'Alert name cannot exceed 80 characters.' });
+    }
+    if (error.message === 'INVALID_FREQUENCY') {
+      return res.status(400).json({ error: 'INVALID_FREQUENCY', message: 'Frequency must be daily or weekly.' });
+    }
+    if (
+      error.message === 'INVALID_WORKPLACE_TYPE' ||
+      error.message === 'INVALID_EMPLOYMENT_TYPE'
+    ) {
+      return res.status(400).json({ error: error.message, message: 'Invalid filter criteria provided.' });
+    }
+    if (error.message === 'MAX_ALERTS_REACHED') {
+      return res.status(400).json({ error: 'MAX_ALERTS_REACHED', message: 'You have reached the maximum allowed number of job alerts (10).' });
+    }
+    console.error('[JOB_ALERTS] Create error:', error);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to create job alert.' });
+  }
+});
+
+/**
+ * GET /api/candidate/job-alerts/:alertId
+ * Gets an individual candidate job alert.
+ */
+candidateRouter.get('/job-alerts/:alertId', requireAuth, requireRole(['candidate']), async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const { alertId } = req.params;
+    if (!JobAlertsStore.isValidUuid(alertId)) {
+      return res.status(400).json({ error: 'INVALID_ALERT_ID', message: 'Alert ID must be a valid UUID' });
+    }
+    const alert = await JobAlertsStore.getAlert(userId, alertId);
+    return res.status(200).json(alert);
+  } catch (error: any) {
+    if (error.message === 'ALERT_NOT_FOUND') {
+      return res.status(404).json({ error: 'ALERT_NOT_FOUND', message: 'Job alert not found.' });
+    }
+    console.error('[JOB_ALERTS] Get error:', error);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to retrieve job alert.' });
+  }
+});
+
+/**
+ * PATCH /api/candidate/job-alerts/:alertId
+ * Updates an individual candidate job alert.
+ */
+candidateRouter.patch('/job-alerts/:alertId', requireAuth, requireRole(['candidate']), async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const { alertId } = req.params;
+    if (!JobAlertsStore.isValidUuid(alertId)) {
+      return res.status(400).json({ error: 'INVALID_ALERT_ID', message: 'Alert ID must be a valid UUID' });
+    }
+    const updated = await JobAlertsStore.updateAlert(userId, alertId, req.body);
+    return res.status(200).json(updated);
+  } catch (error: any) {
+    if (error.message === 'ALERT_NOT_FOUND') {
+      return res.status(404).json({ error: 'ALERT_NOT_FOUND', message: 'Job alert not found.' });
+    }
+    if (
+      error.message === 'INVALID_ALERT_NAME' ||
+      error.message === 'ALERT_NAME_TOO_LONG' ||
+      error.message === 'INVALID_FREQUENCY' ||
+      error.message === 'INVALID_WORKPLACE_TYPE' ||
+      error.message === 'INVALID_EMPLOYMENT_TYPE'
+    ) {
+      return res.status(400).json({ error: error.message, message: 'Invalid criteria update values.' });
+    }
+    console.error('[JOB_ALERTS] Update error:', error);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to update job alert.' });
+  }
+});
+
+/**
+ * DELETE /api/candidate/job-alerts/:alertId
+ * Deletes an individual candidate job alert.
+ */
+candidateRouter.delete('/job-alerts/:alertId', requireAuth, requireRole(['candidate']), async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const { alertId } = req.params;
+    if (!JobAlertsStore.isValidUuid(alertId)) {
+      return res.status(400).json({ error: 'INVALID_ALERT_ID', message: 'Alert ID must be a valid UUID' });
+    }
+    await JobAlertsStore.deleteAlert(userId, alertId);
+    return res.status(200).json({ success: true, message: 'Job alert deleted successfully.' });
+  } catch (error: any) {
+    if (error.message === 'ALERT_NOT_FOUND') {
+      return res.status(404).json({ error: 'ALERT_NOT_FOUND', message: 'Job alert not found.' });
+    }
+    console.error('[JOB_ALERTS] Delete error:', error);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to delete job alert.' });
+  }
+});
+
+/**
+ * GET /api/candidate/job-alerts/:alertId/matches
+ * Returns published jobs deterministically matching this specific alert's criteria.
+ */
+candidateRouter.get('/job-alerts/:alertId/matches', requireAuth, requireRole(['candidate']), async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const { alertId } = req.params;
+    if (!JobAlertsStore.isValidUuid(alertId)) {
+      return res.status(400).json({ error: 'INVALID_ALERT_ID', message: 'Alert ID must be a valid UUID' });
+    }
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+    const result = await JobAlertsStore.findMatchesForAlert(userId, alertId, { limit });
+    return res.status(200).json(result);
+  } catch (error: any) {
+    if (error.message === 'ALERT_NOT_FOUND') {
+      return res.status(404).json({ error: 'ALERT_NOT_FOUND', message: 'Job alert not found.' });
+    }
+    console.error('[JOB_ALERTS] Matches error:', error);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to calculate alert matches.' });
+  }
+});
+
+// ----------------------------------------------------
+// STAGE 6.4: CANDIDATE HOME DASHBOARD AGGREGATION
+// ----------------------------------------------------
+
+/**
+ * GET /api/candidate/dashboard
+ * Aggregates candidate-authenticated activity: profile readiness, saved jobs,
+ * job alerts with unique match counts, recent alignments, and deterministic next actions.
+ * Zero AI runtime execution.
+ */
+candidateRouter.get('/dashboard', requireAuth, requireRole(['candidate']), async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    const dashboardData = await CandidateDashboardStore.getDashboardData(userId);
+    return res.status(200).json(dashboardData);
+  } catch (error: any) {
+    if (error.message === 'INVALID_USER_ID') {
+      return res.status(400).json({ error: 'INVALID_USER_ID', message: 'Invalid candidate identifier.' });
+    }
+    console.error('[CANDIDATE_DASHBOARD] Fetch error:', error);
+    return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Failed to retrieve candidate dashboard.' });
+  }
+});
+
 

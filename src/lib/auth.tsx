@@ -68,11 +68,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // The frontend Supabase client will only be able to fetch roles where auth.uid() = user_id
       // due to the RLS policy on user_roles table.
       const { data, error } = await supabase.from('user_roles').select('role').eq('user_id', userId);
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         setRoles(data.map((r: any) => r.role));
+      } else {
+        // Any registered user is by default a candidate in QWERTY unless assigned ops roles
+        setRoles(['candidate']);
       }
     } catch (error) {
       console.error("Error fetching roles:", error);
+      setRoles(['candidate']);
     } finally {
       setLoading(false);
     }

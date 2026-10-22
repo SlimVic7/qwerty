@@ -174,32 +174,32 @@ export function compareCriteriaLists(
       } else if (fromStatus === 'not_found' && toStatus === 'matched') {
         transition = 'NEWLY_SUPPORTED';
         transition_label = 'Newly Supported';
-        explanation = 'Your approved profile provides stronger evidence for this requirement in the newer analysis.';
+        explanation = 'Your newer approved profile now provides evidence for this requirement.';
         summaryCounts.newly_supported++;
       } else if (fromStatus === 'not_found' && toStatus === 'partially_supported') {
         transition = 'STRENGTHENED';
         transition_label = 'Strengthened';
-        explanation = 'Your approved profile now partially evidences this requirement.';
+        explanation = 'Your newer approved profile provides stronger evidence for this requirement.';
         summaryCounts.strengthened++;
       } else if (fromStatus === 'partially_supported' && toStatus === 'matched') {
         transition = 'STRENGTHENED';
         transition_label = 'Strengthened';
-        explanation = 'Your approved profile now fully substantiates this requirement.';
+        explanation = 'Your newer approved profile provides stronger evidence for this requirement.';
         summaryCounts.strengthened++;
       } else if (fromStatus === 'matched' && toStatus === 'partially_supported') {
         transition = 'WEAKENED';
         transition_label = 'Weakened';
-        explanation = 'Evidence for this requirement is reduced or less comprehensive in the newer profile snapshot.';
+        explanation = 'Your newer approved profile provides less evidence for this requirement.';
         summaryCounts.weakened++;
       } else if (fromStatus === 'matched' && toStatus === 'not_found') {
         transition = 'NO_LONGER_EVIDENCED';
         transition_label = 'No Longer Evidenced';
-        explanation = 'This requirement is no longer evidenced in your newer approved profile snapshot.';
+        explanation = 'Your newer approved profile provides less evidence for this requirement.';
         summaryCounts.no_longer_evidenced++;
       } else if (fromStatus === 'partially_supported' && toStatus === 'not_found') {
         transition = 'WEAKENED';
         transition_label = 'Weakened';
-        explanation = 'Partial evidence previously present was not found in the newer profile snapshot.';
+        explanation = 'Your newer approved profile provides less evidence for this requirement.';
         summaryCounts.weakened++;
       } else {
         transition = 'STATUS_CHANGED';

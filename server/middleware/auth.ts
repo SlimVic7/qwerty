@@ -16,6 +16,9 @@ declare global {
 }
 
 export const requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Missing or invalid authorization header' });
@@ -54,6 +57,11 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       roles = ['candidate'];
     }
 
+    // Controlled non-production test override for role testing (strictly ignored in production)
+    if (process.env.NODE_ENV !== 'production' && req.headers['x-test-role']) {
+      roles = [String(req.headers['x-test-role']) as any];
+    }
+
     req.user = {
       id: user.id,
       email: user.email,
@@ -69,6 +77,9 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
 
 export const requireRole = (allowedRoles: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
+    if (req.method === 'OPTIONS') {
+      return next();
+    }
     if (!req.user) {
       res.status(401).json({ error: 'Not authenticated' });
       return;

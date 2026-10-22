@@ -344,7 +344,7 @@ export function AlignmentHistoryWorkspace() {
                           : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                       }`}
                     >
-                      {toId === item.alignment_id ? 'Target (To)' : 'Set as To'}
+                      {toId === item.alignment_id ? 'Newer (To)' : 'Set as To'}
                     </button>
                   </div>
                 </div>
@@ -385,7 +385,7 @@ export function AlignmentHistoryWorkspace() {
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                  Target Analysis (To)
+                  Newer Analysis (To)
                 </label>
                 <select
                   value={toId}
@@ -446,7 +446,7 @@ export function AlignmentHistoryWorkspace() {
                         </span>
                         {comparison.directly_comparable && (
                           <span className="px-2 py-0.5 bg-emerald-200 text-emerald-900 rounded text-xs font-semibold">
-                            Direct Candidate Progress
+                            Profile Evidence Changed
                           </span>
                         )}
                       </div>
@@ -466,11 +466,11 @@ export function AlignmentHistoryWorkspace() {
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-2xl font-black text-slate-700">
-                          {comparison.score_comparison.from_score}%
+                          {comparison.score_comparison.from_score}
                         </span>
                         <ArrowRight className="w-4 h-4 text-slate-400" />
                         <span className="text-3xl font-black text-slate-900">
-                          {comparison.score_comparison.to_score}%
+                          {comparison.score_comparison.to_score}
                         </span>
                         <span className={`px-2.5 py-1 rounded-md text-sm font-bold ${
                           comparison.score_comparison.display_type === 'PROGRESS_DELTA'

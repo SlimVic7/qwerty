@@ -173,7 +173,9 @@ export function JobBatchReviewPage() {
       { key: 'salary_min', label: 'Min Salary', type: 'number' },
       { key: 'salary_max', label: 'Max Salary', type: 'number' },
       { key: 'salary_currency', label: 'Currency' },
-      { key: 'application_url', label: 'App URL' },
+      { key: 'source_name', label: 'Source Name (e.g. Careers, LinkedIn)' },
+      { key: 'source_url', label: 'Source URL (Discovered At)' },
+      { key: 'application_url', label: 'App URL (Candidate Apply Link)' },
       { key: 'application_email', label: 'App Email' },
       { key: 'description', label: 'Description', type: 'textarea' },
       { key: 'requirements', label: 'Requirements', type: 'textarea' }

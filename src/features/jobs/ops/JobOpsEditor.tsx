@@ -33,6 +33,9 @@ export function JobOpsEditor() {
     application_email: data?.application_email || '',
     source_name: data?.source_name || '',
     source_url: data?.source_url || '',
+    source_type: data?.source_type || 'other_external',
+    source_published_at: data?.source_published_at ? new Date(data.source_published_at).toISOString().slice(0,16) : '',
+    source_last_verified_at: data?.source_last_verified_at ? new Date(data.source_last_verified_at).toISOString().slice(0,16) : '',
     application_deadline: data?.application_deadline ? new Date(data.application_deadline).toISOString().slice(0,16) : ''
   });
 
@@ -92,6 +95,16 @@ export function JobOpsEditor() {
         patchPayload.application_deadline = new Date(patchPayload.application_deadline).toISOString();
       } else {
         patchPayload.application_deadline = null;
+      }
+      if (patchPayload.source_published_at) {
+        patchPayload.source_published_at = new Date(patchPayload.source_published_at).toISOString();
+      } else {
+        patchPayload.source_published_at = null;
+      }
+      if (patchPayload.source_last_verified_at) {
+        patchPayload.source_last_verified_at = new Date(patchPayload.source_last_verified_at).toISOString();
+      } else {
+        patchPayload.source_last_verified_at = null;
       }
       
       if (id) {
@@ -301,9 +314,40 @@ export function JobOpsEditor() {
               </div>
               
               <div className="pt-4 border-t">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Application URL</label>
-                  <input type="url" name="application_url" value={form.application_url} onChange={handleChange} className="w-full border rounded p-2" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Source Type</label>
+                    <select name="source_type" value={form.source_type} onChange={handleChange} className="w-full border rounded p-2">
+                      <option value="external_company">Company Careers Page</option>
+                      <option value="external_job_board">External Job Board</option>
+                      <option value="external_social">Social / Professional Network</option>
+                      <option value="external_recruiter">External Recruiter</option>
+                      <option value="qwerty_direct">QWERTY Direct (Reserved)</option>
+                      <option value="other_external">Other External</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Source Name</label>
+                    <input type="text" name="source_name" value={form.source_name} onChange={handleChange} placeholder="e.g. Acme Careers, LinkedIn" className="w-full border rounded p-2" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label className="block text-sm font-medium mb-1">Source URL (Discovered At)</label>
+                  <input type="url" name="source_url" value={form.source_url} onChange={handleChange} placeholder="https://..." className="w-full border rounded p-2" />
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Source Published At</label>
+                    <input type="datetime-local" name="source_published_at" value={form.source_published_at} onChange={handleChange} className="w-full border rounded p-2" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Source Last Verified At</label>
+                    <input type="datetime-local" name="source_last_verified_at" value={form.source_last_verified_at} onChange={handleChange} className="w-full border rounded p-2" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label className="block text-sm font-medium mb-1">Application URL (Outbound Apply)</label>
+                  <input type="url" name="application_url" value={form.application_url} onChange={handleChange} placeholder="https://..." className="w-full border rounded p-2" />
                 </div>
                 <div className="mt-4">
                   <label className="block text-sm font-medium mb-1">Application Email</label>

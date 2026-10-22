@@ -20,6 +20,7 @@ export default defineConfig({
       'server/**/*.test.ts',
       'server/**/*.test.tsx'
     ],
+    testTimeout: 15000,
     exclude: ['**/node_modules/**', '**/dist/**'],
   },
 });

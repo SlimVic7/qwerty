@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { MapPin, Briefcase, Building2, Clock, Globe, ArrowLeft, Send, ExternalLink, Calendar, Compass } from 'lucide-react';
+import { MapPin, Briefcase, Building2, Clock, Globe, ArrowLeft, Send, ExternalLink, Calendar, Compass, Bell } from 'lucide-react';
 import { getPublishedJobBySlug, Job } from './jobs.service.js';
 import { JobAlignmentCard } from '../matching/JobAlignmentCard.js';
 import { SkillsGapCard } from '../skillsGap/SkillsGapCard.js';
 import { CvTailoringCard } from '../tailoring/CvTailoringCard.js';
 import { AlignmentHistoryCard } from '../alignmentHistory/AlignmentHistoryCard.js';
+import { SaveJobButton } from '../savedJobs/SaveJobButton.js';
+import { JobApplyAction } from './JobApplyAction.js';
+import { JobSourceCard } from './JobSourceCard.js';
 import { useAuth } from '../../lib/auth.js';
 
 export function JobDetailPage() {
   const { slug } = useParams<{ slug: string }>();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -160,25 +163,16 @@ export function JobDetailPage() {
               </div>
             </div>
             
-            <div className="shrink-0 mt-4 md:mt-0 md:ml-6 flex flex-col gap-3 md:min-w-[180px]">
-              {applyLink ? (
-                <a 
-                  href={applyLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full inline-flex items-center justify-center gap-2 bg-[#0B3D2E] hover:bg-[#155a44] text-white px-6 py-3 rounded-lg font-semibold transition-colors shadow-sm"
-                >
-                  Apply Now
-                  {job.application_url ? <ExternalLink className="w-4 h-4" /> : <Send className="w-4 h-4" />}
-                </a>
-              ) : (
-                <button 
-                  disabled
-                  className="w-full bg-slate-100 text-slate-400 px-6 py-3 rounded-lg font-semibold cursor-not-allowed border border-slate-200"
-                >
-                  Applications Closed
-                </button>
-              )}
+            <div className="shrink-0 mt-4 md:mt-0 md:ml-6 flex flex-col gap-3 md:min-w-[200px]">
+              <JobApplyAction job={job} />
+              <SaveJobButton jobId={job.id} jobTitle={job.title} />
+              <Link
+                to="/candidate/job-alerts"
+                className="text-xs text-center text-slate-500 hover:text-[#0B3D2E] flex items-center justify-center gap-1.5 transition-colors py-1"
+              >
+                <Bell className="w-3.5 h-3.5" />
+                Alert me for similar roles
+              </Link>
               {job.application_deadline && (
                 <div className="text-xs text-center text-slate-500 flex items-center justify-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5" />
@@ -197,7 +191,12 @@ export function JobDetailPage() {
         <div className="md:col-span-2 space-y-8">
 
           {/* Candidate Role Alignment Section */}
-          {user ? (
+          {authLoading ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm animate-pulse">
+              <div className="h-5 w-48 bg-slate-100 rounded mb-2" />
+              <div className="h-4 w-72 bg-slate-100 rounded" />
+            </div>
+          ) : user ? (
             <div className="space-y-4">
               <div id="job-alignment-card">
                 <JobAlignmentCard 
@@ -233,7 +232,8 @@ export function JobDetailPage() {
                   Sign in with your QWERTY candidate account to compare your approved profile against this role's requirements.
                 </p>
                 <Link
-                  to="/auth"
+                  to={`/login?returnTo=${encodeURIComponent(`/jobs/${slug || ''}`)}`}
+                  state={{ from: `/jobs/${slug || ''}` }}
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#0B3D2E] hover:bg-[#155a44] text-white rounded-lg text-xs font-semibold transition-colors shadow-sm"
                 >
                   Sign In to Check Alignment
@@ -290,6 +290,8 @@ export function JobDetailPage() {
 
         {/* Right Column - Meta Sidebar */}
         <div className="space-y-6">
+          <JobSourceCard job={job} />
+
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
             <h3 className="font-bold text-slate-900 mb-4">Job Overview</h3>
             <dl className="space-y-4 text-sm">
@@ -309,19 +311,6 @@ export function JobDetailPage() {
                 <div>
                   <dt className="text-slate-500 mb-1">Country</dt>
                   <dd className="font-medium text-slate-900">{job.country}</dd>
-                </div>
-              )}
-              {job.source_name && (
-                <div>
-                  <dt className="text-slate-500 mb-1">Source</dt>
-                  <dd className="font-medium text-slate-900">
-                    {job.source_url ? (
-                      <a href={job.source_url} target="_blank" rel="noopener noreferrer" className="text-[#0B3D2E] hover:underline inline-flex items-center gap-1">
-                        {job.source_name}
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    ) : job.source_name}
-                  </dd>
                 </div>
               )}
             </dl>

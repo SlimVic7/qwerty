@@ -1,26 +1,43 @@
 import { supabase } from './supabase.js';
 
 export async function authFetch(endpoint: string, options: RequestInit = {}) {
-  const { data: { session }, error } = await supabase.auth.getSession();
-  
-  if (error || !session) throw new Error('Your session has expired. Please sign in again.');
+  let session = null;
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (!error && data?.session) {
+      session = data.session;
+    }
+  } catch (authError) {
+    console.warn('[authFetch] Could not retrieve session:', authError);
+  }
 
-    const isFormData = options.body instanceof FormData;
+  if (!session) {
+    throw new Error('Your session has expired. Please sign in again.');
+  }
+
+  const isFormData = options.body instanceof FormData;
   const headers: any = {
     'Authorization': `Bearer ${session.access_token}`,
     ...(options.headers || {})
   };
-  
+
   if (!isFormData && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
-  
-  // If headers['Content-Type'] is explicitly set to null/undefined, we could delete it, but the above is safer.
-  // Actually, if it's FormData, the browser sets Content-Type automatically with boundary. So we should NOT set it.
 
+  let response: Response;
+  try {
+    response = await fetch(endpoint, { ...options, headers });
+  } catch {
+    // If a transient network glitch occurs, retry once after a short delay
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    try {
+      response = await fetch(endpoint, { ...options, headers });
+    } catch (retryErr: any) {
+      throw new Error(retryErr.message || 'Network connection error. Please verify your connection.');
+    }
+  }
 
-  const response = await fetch(endpoint, { ...options, headers });
-  
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     const message = errorData.error || errorData.message || `Request failed with status ${response.status}`;

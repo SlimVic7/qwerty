@@ -11,14 +11,16 @@ function generateSlug(title: string, company: string): string {
   return `${base}-${randomSuffix}`;
 }
 
-// Extract exact allowed patch fields, discarding anything else (and throwing on unknown if we wanted to, but we'll manually check inside)
+// Extract exact allowed patch fields, discarding anything else
 function extractPatchFields(body: any): any {
   const allowed = [
     'title', 'company_name', 'company_logo_url', 'location_text', 'country', 'city',
     'workplace_type', 'employment_type', 'experience_level', 'description',
     'responsibilities', 'requirements', 'preferred_qualifications', 'benefits',
     'salary_min', 'salary_max', 'salary_currency', 'salary_period',
-    'application_url', 'application_email', 'source_name', 'source_url', 'application_deadline'
+    'application_url', 'application_email', 'source_name', 'source_url',
+    'source_type', 'source_published_at', 'source_last_verified_at',
+    'application_deadline'
   ];
 
   const updates: any = {};
@@ -26,10 +28,24 @@ function extractPatchFields(body: any): any {
     if (!allowed.includes(key)) {
       throw new Error(`Invalid update field: ${key}`);
     }
-    updates[key] = body[key];
+    // Normalize empty strings for nullable URL and timestamp fields to null
+    if (['application_url', 'source_url', 'source_published_at', 'source_last_verified_at', 'application_deadline'].includes(key) && body[key] === '') {
+      updates[key] = null;
+    } else {
+      updates[key] = body[key];
+    }
   }
   return updates;
 }
+
+const VALID_SOURCE_TYPES = [
+  'external_company',
+  'external_job_board',
+  'external_social',
+  'external_recruiter',
+  'qwerty_direct',
+  'other_external'
+];
 
 function validateJobData(data: any, isCreate = false) {
   if (isCreate && (!data.title || !data.company_name || !data.description)) {
@@ -53,11 +69,26 @@ function validateJobData(data: any, isCreate = false) {
   if ('application_email' in data && data.application_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.application_email)) {
     return 'Invalid application email format';
   }
-  if ('application_url' in data && data.application_url && !/^https?:\/\/.+/.test(data.application_url)) {
-    return 'Application URL must be HTTP or HTTPS';
+  if ('application_url' in data && data.application_url) {
+    if (typeof data.application_url !== 'string' || !/^https?:\/\/.+/i.test(data.application_url) || data.application_url.length > 2048) {
+      return 'Application URL must be HTTP or HTTPS with max length 2048';
+    }
   }
-  if ('source_url' in data && data.source_url && !/^https?:\/\/.+/.test(data.source_url)) {
-    return 'Source URL must be HTTP or HTTPS';
+  if ('source_url' in data && data.source_url) {
+    if (typeof data.source_url !== 'string' || !/^https?:\/\/.+/i.test(data.source_url) || data.source_url.length > 2048) {
+      return 'Source URL must be HTTP or HTTPS with max length 2048';
+    }
+  }
+  if ('source_type' in data) {
+    if (!data.source_type || !VALID_SOURCE_TYPES.includes(data.source_type)) {
+      return `Invalid source_type: must be one of ${VALID_SOURCE_TYPES.join(', ')}`;
+    }
+  }
+  if ('source_published_at' in data && data.source_published_at && isNaN(Date.parse(data.source_published_at))) {
+    return 'Invalid source published at format';
+  }
+  if ('source_last_verified_at' in data && data.source_last_verified_at && isNaN(Date.parse(data.source_last_verified_at))) {
+    return 'Invalid source last verified at format';
   }
   if ('application_deadline' in data && data.application_deadline && isNaN(Date.parse(data.application_deadline))) {
     return 'Invalid application deadline format';

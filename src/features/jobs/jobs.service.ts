@@ -25,6 +25,9 @@ export interface Job {
   application_email: string | null;
   source_name: string | null;
   source_url: string | null;
+  source_type?: 'external_company' | 'external_job_board' | 'external_social' | 'external_recruiter' | 'qwerty_direct' | 'other_external';
+  source_published_at?: string | null;
+  source_last_verified_at?: string | null;
   application_deadline: string | null;
   status: 'draft' | 'published' | 'closed' | 'archived';
   featured: boolean;

@@ -219,7 +219,7 @@ describe('Job Alignment History & Comparison Engine (Stage 5.4)', () => {
   });
 
   describe('Direct Candidate Change Fixture (Section 39)', () => {
-    it('classifies direct candidate profile evidence update cleanly with progress delta', () => {
+    it('A: 40 -> 55 displays +15 points and never +15%', () => {
       const olderAnalysis: CandidateJobAlignmentRecord = {
         ...baseAlignment,
         id: 'align-old',
@@ -258,27 +258,253 @@ describe('Job Alignment History & Comparison Engine (Stage 5.4)', () => {
       expect(result.changes.job_source_changed).toBe(false);
       expect(result.changes.ruleset_changed).toBe(false);
 
-      // Score delta
+      // Score delta must be in points, not percent
       expect(result.score_comparison.display_type).toBe('PROGRESS_DELTA');
       expect(result.score_comparison.score_delta).toBe(15);
-      expect(result.score_comparison.delta_label).toBe('+15%');
-      expect(result.score_comparison.message).toContain('with stronger evidence substantiated');
+      expect(result.score_comparison.delta_label).toBe('+15 points');
+      expect(result.score_comparison.delta_label).not.toContain('%');
+      expect(result.score_comparison.message).toBe(
+        "Alignment score change: +15 points. Your newer approved profile provides stronger evidence for some of this role's requirements."
+      );
+    });
 
-      // Criterion transition
+    it('B: 60 -> 45 displays -15 points for decrease', () => {
+      const olderAnalysis: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-higher',
+        score: 60,
+        parse_id: 'parse-v1',
+        candidate_applied_at: '2026-09-10T10:00:00.000Z',
+        criteria_breakdown: [
+          { id: 'crit-cisa', criterion: 'CISA certification', status: 'matched', candidate_evidence: 'CISA #12345' },
+          { id: 'crit-tenure', criterion: '5+ years experience', status: 'partially_supported' }
+        ]
+      };
+
+      const newerAnalysis: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-lower',
+        score: 45,
+        parse_id: 'parse-v2',
+        candidate_applied_at: '2026-09-20T10:00:00.000Z',
+        criteria_breakdown: [
+          { id: 'crit-cisa', criterion: 'CISA certification', status: 'not_found' },
+          { id: 'crit-tenure', criterion: '5+ years experience', status: 'not_found' }
+        ]
+      };
+
+      const result = buildAlignmentComparisonResponse(
+        olderAnalysis,
+        newerAnalysis,
+        canonicalJob,
+        latestParse
+      );
+
+      expect(result.comparison_type).toBe('CANDIDATE_EVIDENCE_CHANGED');
+      expect(result.directly_comparable).toBe(true);
+      expect(result.score_comparison.score_delta).toBe(-15);
+      expect(result.score_comparison.delta_label).toBe('-15 points');
+      expect(result.score_comparison.delta_label).not.toContain('%');
+      expect(result.score_comparison.message).toBe(
+        "Alignment score change: -15 points. Your newer approved profile provides less evidence for some of this role's requirements."
+      );
+    });
+
+    it('C: direct candidate-evidence comparison contains no wording "candidate progress"', () => {
+      const olderAnalysis: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-10',
+        score: 40,
+        parse_id: 'parse-v1',
+        candidate_applied_at: '2026-09-10T10:00:00.000Z'
+      };
+
+      const newerAnalysis: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-11',
+        score: 55,
+        parse_id: 'parse-v2',
+        candidate_applied_at: '2026-09-20T10:00:00.000Z'
+      };
+
+      const result = buildAlignmentComparisonResponse(
+        olderAnalysis,
+        newerAnalysis,
+        canonicalJob,
+        latestParse
+      );
+
+      expect(result.comparison_headline).toBe('Profile Evidence Changed');
+      expect(result.comparison_explanation).not.toContain('candidate progress');
+      expect(result.comparison_explanation).not.toContain('Candidate progress');
+      expect(result.comparison_explanation).not.toContain('Career improvement');
+      expect(result.comparison_explanation).not.toContain('You improved');
+      expect(result.comparison_explanation).not.toContain('You became more qualified');
+
+      const jsonStr = JSON.stringify(result).toLowerCase();
+      expect(jsonStr).not.toContain('candidate progress');
+      expect(jsonStr).not.toContain('career improvement');
+      expect(jsonStr).not.toContain('you improved');
+      expect(jsonStr).not.toContain('you became more qualified');
+      expect(jsonStr).not.toContain('gained skill');
+    });
+
+    it('D: not_found -> matched yields "newer approved profile now provides evidence" and not "candidate gained skill"', () => {
+      const olderAnalysis: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-old-d',
+        parse_id: 'parse-v1',
+        candidate_applied_at: '2026-09-10T10:00:00.000Z',
+        criteria_breakdown: [
+          { id: 'crit-cisa', criterion: 'CISA certification', status: 'not_found' }
+        ]
+      };
+
+      const newerAnalysis: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-new-d',
+        parse_id: 'parse-v2',
+        candidate_applied_at: '2026-09-20T10:00:00.000Z',
+        criteria_breakdown: [
+          { id: 'crit-cisa', criterion: 'CISA certification', status: 'matched', candidate_evidence: 'CISA #12345' }
+        ]
+      };
+
+      const result = buildAlignmentComparisonResponse(
+        olderAnalysis,
+        newerAnalysis,
+        canonicalJob,
+        latestParse
+      );
+
       const cisaComp = result.criteria_comparisons.find(c => c.criterion_id === 'crit-cisa');
       expect(cisaComp?.transition).toBe('NEWLY_SUPPORTED');
       expect(cisaComp?.transition_label).toBe('Newly Supported');
-      expect(cisaComp?.explanation).toBe('Your approved profile provides stronger evidence for this requirement in the newer analysis.');
+      expect(cisaComp?.explanation).toBe('Your newer approved profile now provides evidence for this requirement.');
+      expect(cisaComp?.explanation).not.toContain('gained');
+      expect(cisaComp?.explanation).not.toContain('skill');
+    });
 
-      // Never say candidate became a better person
-      const jsonStr = JSON.stringify(result);
-      expect(jsonStr).not.toContain('You became better');
-      expect(jsonStr).not.toContain('hiring chance');
+    it('E: partially_supported -> matched yields evidence-strengthening wording', () => {
+      const olderAnalysis: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-old-e',
+        parse_id: 'parse-v1',
+        candidate_applied_at: '2026-09-10T10:00:00.000Z',
+        criteria_breakdown: [
+          { id: 'crit-lead', criterion: 'Team leadership', status: 'partially_supported', candidate_evidence: 'Led 1 project' }
+        ]
+      };
+
+      const newerAnalysis: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-new-e',
+        parse_id: 'parse-v2',
+        candidate_applied_at: '2026-09-20T10:00:00.000Z',
+        criteria_breakdown: [
+          { id: 'crit-lead', criterion: 'Team leadership', status: 'matched', candidate_evidence: 'Led team of 8 for 3 years' }
+        ]
+      };
+
+      const result = buildAlignmentComparisonResponse(
+        olderAnalysis,
+        newerAnalysis,
+        canonicalJob,
+        latestParse
+      );
+
+      const leadComp = result.criteria_comparisons.find(c => c.criterion_id === 'crit-lead');
+      expect(leadComp?.transition).toBe('STRENGTHENED');
+      expect(leadComp?.transition_label).toBe('Strengthened');
+      expect(leadComp?.explanation).toBe('Your newer approved profile provides stronger evidence for this requirement.');
+      expect(leadComp?.explanation).not.toContain('skill');
+      expect(leadComp?.explanation).not.toContain('gained');
+    });
+
+    it('verifies negative transitions state profile provides less evidence without implying capability loss', () => {
+      const olderAnalysis: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-old-neg',
+        parse_id: 'parse-v1',
+        candidate_applied_at: '2026-09-10T10:00:00.000Z',
+        criteria_breakdown: [
+          { id: 'crit-1', criterion: 'Skill 1', status: 'matched' },
+          { id: 'crit-2', criterion: 'Skill 2', status: 'partially_supported' }
+        ]
+      };
+
+      const newerAnalysis: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-new-neg',
+        parse_id: 'parse-v2',
+        candidate_applied_at: '2026-09-20T10:00:00.000Z',
+        criteria_breakdown: [
+          { id: 'crit-1', criterion: 'Skill 1', status: 'not_found' },
+          { id: 'crit-2', criterion: 'Skill 2', status: 'not_found' }
+        ]
+      };
+
+      const result = buildAlignmentComparisonResponse(
+        olderAnalysis,
+        newerAnalysis,
+        canonicalJob,
+        latestParse
+      );
+
+      const comp1 = result.criteria_comparisons.find(c => c.criterion_id === 'crit-1');
+      expect(comp1?.transition).toBe('NO_LONGER_EVIDENCED');
+      expect(comp1?.explanation).toBe('Your newer approved profile provides less evidence for this requirement.');
+
+      const comp2 = result.criteria_comparisons.find(c => c.criterion_id === 'crit-2');
+      expect(comp2?.transition).toBe('WEAKENED');
+      expect(comp2?.explanation).toBe('Your newer approved profile provides less evidence for this requirement.');
+    });
+
+    it('handles zero-point score difference (55 -> 55) with precise non-contradictory wording', () => {
+      const olderAnalysis: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-zero-1',
+        score: 55,
+        parse_id: 'parse-v1',
+        candidate_applied_at: '2026-09-10T10:00:00.000Z',
+        criteria_breakdown: [
+          { id: 'crit-cisa', criterion: 'CISA certification', status: 'not_found' },
+          { id: 'crit-tenure', criterion: '5+ years experience', status: 'matched' }
+        ]
+      };
+
+      const newerAnalysis: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-zero-2',
+        score: 55,
+        parse_id: 'parse-v2',
+        candidate_applied_at: '2026-09-20T10:00:00.000Z',
+        criteria_breakdown: [
+          { id: 'crit-cisa', criterion: 'CISA certification', status: 'matched' },
+          { id: 'crit-tenure', criterion: '5+ years experience', status: 'not_found' }
+        ]
+      };
+
+      const result = buildAlignmentComparisonResponse(
+        olderAnalysis,
+        newerAnalysis,
+        canonicalJob,
+        latestParse
+      );
+
+      expect(result.comparison_type).toBe('CANDIDATE_EVIDENCE_CHANGED');
+      expect(result.directly_comparable).toBe(true);
+      expect(result.score_comparison.score_delta).toBe(0);
+      expect(result.score_comparison.delta_label).toBe('0 points');
+      expect(result.score_comparison.message).toBe(
+        'Alignment score change: 0 points. Your approved profile evidence changed, but the overall alignment score remained the same.'
+      );
+      expect(result.score_comparison.message).not.toContain('Your alignment score changed');
     });
   });
 
   describe('Job Change Fixture (Section 40)', () => {
-    it('classifies employer requirement changes without candidate progress claims', () => {
+    it('classifies employer requirement changes without candidate progress claims and uses Newer score', () => {
       const olderAnalysis: CandidateJobAlignmentRecord = {
         ...baseAlignment,
         id: 'align-job-v1',
@@ -311,6 +537,8 @@ describe('Job Alignment History & Comparison Engine (Stage 5.4)', () => {
       expect(result.comparison_type).toBe('JOB_CHANGED');
       expect(result.directly_comparable).toBe(false);
       expect(result.score_comparison.display_type).toBe('SIDE_BY_SIDE');
+      expect(result.score_comparison.message).toContain('Previous score: 60 | Newer score: 45.');
+      expect(result.score_comparison.message).not.toContain('Target score');
       expect(result.comparison_explanation).toContain('job requirements changed');
 
       // Requirement added & removed
@@ -449,7 +677,8 @@ describe('Job Alignment History & Comparison Engine (Stage 5.4)', () => {
       expect(result.comparison_type).toBe('SAME_SNAPSHOT');
       expect(result.result_variance_detected).toBe(true);
       expect(result.comparison_headline).toContain('Result Variance Detected');
-      expect(result.comparison_explanation).toContain('does not reflect candidate progress');
+      expect(result.comparison_explanation).toContain('does not reflect changes in profile evidence');
+      expect(result.comparison_explanation).not.toContain('candidate progress');
     });
   });
 
@@ -530,6 +759,111 @@ describe('Job Alignment History & Comparison Engine (Stage 5.4)', () => {
       expect(normalized[3].criterion).toBe('Another legacy format');
       expect(normalized[3].status).toBe('partially_supported');
       expect(normalized[4].status).toBe('not_applicable');
+    });
+  });
+
+  describe('Live Production Expectations (Sections 5 & 6)', () => {
+    it('Senior Internal Auditor: v1.3 (18) vs earlier v1.3 (18) -> SAME_SNAPSHOT, 0 points, no variance', () => {
+      const v13Earlier: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-auditor-v13-earlier',
+        score: 18,
+        ruleset_version: 'job-alignment-v1.3'
+      };
+
+      const v13Latest: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-auditor-v13-latest',
+        score: 18,
+        ruleset_version: 'job-alignment-v1.3'
+      };
+
+      const result = buildAlignmentComparisonResponse(
+        v13Earlier,
+        v13Latest,
+        canonicalJob,
+        latestParse
+      );
+
+      expect(result.comparison_type).toBe('SAME_SNAPSHOT');
+      expect(result.directly_comparable).toBe(false);
+      expect(result.result_variance_detected).toBe(false);
+      expect(result.score_comparison.score_delta).toBe(0);
+      expect(result.score_comparison.from_score).toBe(18);
+      expect(result.score_comparison.to_score).toBe(18);
+    });
+
+    it('Senior Internal Auditor: v1.3 (18) vs v1.2 (22) -> RULESET_CHANGED, not directly comparable, methodology warning', () => {
+      const v12Record: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-auditor-v12',
+        score: 22,
+        ruleset_version: 'job-alignment-v1.2'
+      };
+
+      const v13Record: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-auditor-v13',
+        score: 18,
+        ruleset_version: 'job-alignment-v1.3'
+      };
+
+      const result = buildAlignmentComparisonResponse(
+        v12Record,
+        v13Record,
+        canonicalJob,
+        latestParse
+      );
+
+      expect(result.comparison_type).toBe('RULESET_CHANGED');
+      expect(result.directly_comparable).toBe(false);
+      expect(result.score_comparison.display_type).toBe('SIDE_BY_SIDE');
+      expect(result.score_comparison.message).toBe(
+        'Previous score: 22 | Newer score: 18. Side-by-side comparison only (score differences reflect changes in job requirements or methodology rather than profile evidence).'
+      );
+      expect(result.comparison_explanation).toContain("QWERTY's alignment methodology changed");
+
+      // Verify absence of candidate progress / regression language
+      const jsonStr = JSON.stringify(result).toLowerCase();
+      expect(jsonStr).not.toContain('candidate progress');
+      expect(jsonStr).not.toContain('candidate regression');
+      expect(jsonStr).not.toContain('you improved');
+    });
+
+    it('Network Engineer: v1.3 (0) vs historical v1 (44) preserves score 44 exactly and warns of methodology change', () => {
+      const v1Record: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-neteng-v1',
+        score: 44,
+        ruleset_version: 'job-alignment-v1'
+      };
+
+      const v13Record: CandidateJobAlignmentRecord = {
+        ...baseAlignment,
+        id: 'align-neteng-v13',
+        score: 0,
+        ruleset_version: 'job-alignment-v1.3'
+      };
+
+      const result = buildAlignmentComparisonResponse(
+        v1Record,
+        v13Record,
+        canonicalJob,
+        latestParse
+      );
+
+      expect(result.comparison_type).toBe('RULESET_CHANGED');
+      expect(result.directly_comparable).toBe(false);
+      expect(result.score_comparison.from_score).toBe(44);
+      expect(result.score_comparison.to_score).toBe(0);
+      expect(result.score_comparison.display_type).toBe('SIDE_BY_SIDE');
+      expect(result.score_comparison.message).toBe(
+        'Previous score: 44 | Newer score: 0. Side-by-side comparison only (score differences reflect changes in job requirements or methodology rather than profile evidence).'
+      );
+
+      // Must not state candidate decreased
+      expect(result.score_comparison.message).not.toContain('decreased by 44 points');
+      expect(JSON.stringify(result)).not.toContain('decreased by 44 points');
     });
   });
 });

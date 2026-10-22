@@ -219,7 +219,7 @@ export function buildAlignmentComparisonResponse(
       result_variance_detected = true;
       comparison_headline = 'Identical Source Snapshot (Result Variance Detected)';
       comparison_explanation =
-        'These analyses evaluate the identical profile and job version under the same ruleset, but yield different results. This variance does not reflect candidate progress.';
+        'These analyses evaluate the identical profile and job version under the same ruleset, but yield different results. This variance does not reflect changes in profile evidence.';
     } else {
       comparison_headline = 'Identical Source Snapshot';
       comparison_explanation =
@@ -228,15 +228,15 @@ export function buildAlignmentComparisonResponse(
   } else if (candChanged && !jobChanged && !rulesetChanged) {
     comparison_type = 'CANDIDATE_EVIDENCE_CHANGED';
     directly_comparable = true;
-    comparison_headline = 'Direct Candidate Profile Comparison';
+    comparison_headline = 'Profile Evidence Changed';
     comparison_explanation =
-      'The job requirements and matching methodology remained unchanged while your approved profile evidence was updated. Score differences directly reflect changes in evidence alignment.';
+      'The job requirements and matching methodology remained unchanged while your approved profile evidence was updated. Your alignment score changed after your approved profile evidence changed.';
   } else if (!candChanged && jobChanged && !rulesetChanged) {
     comparison_type = 'JOB_CHANGED';
     directly_comparable = false;
     comparison_headline = 'Job Requirements Changed';
     comparison_explanation =
-      'The job requirements changed between these analyses, so the score difference is not a direct measure of candidate progress.';
+      'The job requirements changed between these analyses, so the score difference is not a direct measure of profile evidence changes.';
   } else if (!candChanged && !jobChanged && rulesetChanged) {
     comparison_type = 'RULESET_CHANGED';
     directly_comparable = false;
@@ -256,18 +256,18 @@ export function buildAlignmentComparisonResponse(
   const scoreDelta = toScore - fromScore;
 
   let display_type: 'PROGRESS_DELTA' | 'SIDE_BY_SIDE' = 'SIDE_BY_SIDE';
-  let delta_label = `${fromScore}% → ${toScore}%`;
-  let message = `Previous: ${fromScore}% | Target: ${toScore}%. Side-by-side comparison only (not a direct measure of candidate progress).`;
+  let delta_label = `${fromScore} → ${toScore}`;
+  let message = `Previous score: ${fromScore} | Newer score: ${toScore}. Side-by-side comparison only (score differences reflect changes in job requirements or methodology rather than profile evidence).`;
 
   if (directly_comparable) {
     display_type = 'PROGRESS_DELTA';
-    delta_label = scoreDelta > 0 ? `+${scoreDelta}%` : `${scoreDelta}%`;
+    delta_label = scoreDelta > 0 ? `+${scoreDelta} points` : scoreDelta < 0 ? `${scoreDelta} points` : '0 points';
     message =
       scoreDelta > 0
-        ? 'Alignment score changed from ' + fromScore + '% to ' + toScore + '%, with stronger evidence substantiated in your newer profile.'
+        ? `Alignment score change: +${scoreDelta} points. Your newer approved profile provides stronger evidence for some of this role's requirements.`
         : scoreDelta < 0
-        ? 'Alignment score changed from ' + fromScore + '% to ' + toScore + '%, with reduced evidence substantiated in your newer profile.'
-        : 'Alignment score remained unchanged at ' + toScore + '%.';
+        ? `Alignment score change: ${scoreDelta} points. Your newer approved profile provides less evidence for some of this role's requirements.`
+        : `Alignment score change: 0 points. Your approved profile evidence changed, but the overall alignment score remained the same.`;
   }
 
   // Criteria comparison

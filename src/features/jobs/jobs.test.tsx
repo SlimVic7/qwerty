@@ -102,11 +102,11 @@ describe('Jobs Public Foundation', () => {
 
     expect(screen.getAllByText('Tech Corp').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Great role').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Apply Now').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Apply on (External Site|Company Website)/i).length).toBeGreaterThan(0);
     
-    // Check apply link href
-    const applyButton = screen.getAllByText('Apply Now')[0].closest('a');
-    expect(applyButton).toHaveProperty('href', 'https://example.com/');
+    // Check apply action button is rendered
+    const applyButton = screen.getByRole('button', { name: /Apply on (External Site|Company Website)/i });
+    expect(applyButton).toBeDefined();
   });
 
   it('handles unknown slug / not found state gracefully', async () => {

@@ -128,12 +128,7 @@ export interface AlignmentComparisonResponse {
  * Fetches alignment history for a job.
  */
 export async function getAlignmentHistory(jobId: string, limit: number = 20): Promise<AlignmentHistoryResponse> {
-  const res = await authFetch(`/api/candidate/jobs/${jobId}/alignment-history?limit=${limit}`);
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.message || errorData.error || 'Failed to fetch alignment history');
-  }
-  return res.json();
+  return (await authFetch(`/api/candidate/jobs/${jobId}/alignment-history?limit=${limit}`)) as AlignmentHistoryResponse;
 }
 
 /**
@@ -144,10 +139,7 @@ export async function compareAlignments(
   fromId: string,
   toId: string
 ): Promise<AlignmentComparisonResponse> {
-  const res = await authFetch(`/api/candidate/jobs/${jobId}/alignment-history/compare?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}`);
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.message || errorData.error || 'Failed to compare alignment records');
-  }
-  return res.json();
+  return (await authFetch(
+    `/api/candidate/jobs/${jobId}/alignment-history/compare?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}`
+  )) as AlignmentComparisonResponse;
 }

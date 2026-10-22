@@ -151,4 +151,57 @@ describe('Jobs Express Router (RPC Hardening)', () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: 'Empty patch payload' });
   });
+
+  it('PATCH source attribution fields successfully passes them to ops_update_job RPC', async () => {
+    mockRpc.mockResolvedValue({ data: { id: 'j1', source_type: 'external_job_board' }, error: null });
+    const payload = {
+      source_type: 'external_job_board',
+      source_name: 'TechBoard',
+      source_url: 'https://techboard.example/jobs/123',
+      application_url: 'https://company.example/apply',
+      source_published_at: '2026-10-01T12:00:00.000Z',
+      source_last_verified_at: '2026-10-09T10:00:00.000Z'
+    };
+    const res = await runRoute('PATCH', '/j1', payload, { 'x-mock-role': 'admin' });
+
+    expect(res.status).not.toHaveBeenCalledWith(400);
+    expect(mockRpc).toHaveBeenCalledWith('ops_update_job', {
+      p_job_id: 'j1',
+      p_actor_id: 'u1',
+      p_updates: payload
+    });
+  });
+
+  it('PATCH rejects invalid source_type with 400 validation error', async () => {
+    const res = await runRoute('PATCH', '/j1', { source_type: 'invalid_board' }, { 'x-mock-role': 'admin' });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      error: expect.stringContaining('Invalid source_type')
+    }));
+  });
+
+  it('PATCH rejects null source_type deterministically with 400 validation error', async () => {
+    const res = await runRoute('PATCH', '/j1', { source_type: null }, { 'x-mock-role': 'admin' });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      error: expect.stringContaining('Invalid source_type')
+    }));
+  });
+
+  it('PATCH rejects invalid application_url scheme with 400 validation error', async () => {
+    const res = await runRoute('PATCH', '/j1', { application_url: 'javascript:alert(1)' }, { 'x-mock-role': 'admin' });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Application URL must be HTTP or HTTPS with max length 2048' });
+  });
+
+  it('PATCH normalizes empty string URLs to null', async () => {
+    mockRpc.mockResolvedValue({ data: { id: 'j1' }, error: null });
+    const res = await runRoute('PATCH', '/j1', { application_url: '', source_url: '' }, { 'x-mock-role': 'admin' });
+    expect(res.status).not.toHaveBeenCalledWith(400);
+    expect(mockRpc).toHaveBeenCalledWith('ops_update_job', {
+      p_job_id: 'j1',
+      p_actor_id: 'u1',
+      p_updates: { application_url: null, source_url: null }
+    });
+  });
 });

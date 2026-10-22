@@ -16,7 +16,10 @@ export function CandidateLayout() {
           <Link to="/" className="text-xl font-bold tracking-tight">QWERTY</Link>
         </div>
         <nav className="flex-1 p-4 flex flex-col gap-2">
-          <Link to="/candidate" className="p-2 rounded hover:bg-slate-100 font-medium">Dashboard</Link>
+          <Link to="/candidate/dashboard" className="p-2 rounded hover:bg-slate-100 font-medium">Dashboard</Link>
+          <Link to="/candidate/saved-jobs" className="p-2 rounded hover:bg-slate-100 font-medium">Saved Jobs</Link>
+          <Link to="/candidate/job-alerts" className="p-2 rounded hover:bg-slate-100 font-medium">Job Alerts</Link>
+          <Link to="/candidate/career" className="p-2 rounded hover:bg-slate-100 font-medium">Career Hub</Link>
           <Link to="/candidate/profile" className="p-2 rounded hover:bg-slate-100 font-medium">Profile</Link>
         </nav>
         <div className="p-4 border-t border-slate-200">

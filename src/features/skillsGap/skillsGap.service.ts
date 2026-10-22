@@ -102,16 +102,14 @@ export const skillsGapService = {
    * Throws if alignment is required or other validation error occurs.
    */
   async getSkillsGap(jobId: string): Promise<SkillsGapAnalysisResult> {
-    const res = await authFetch(`/api/candidate/jobs/${jobId}/skills-gap`);
-    const data = await res.json();
-
-    if (!res.ok) {
-      const err: any = new Error(data.message || 'Failed to fetch skills gap analysis');
-      err.code = data.error;
-      err.response = data;
+    try {
+      return (await authFetch(`/api/candidate/jobs/${jobId}/skills-gap`)) as SkillsGapAnalysisResult;
+    } catch (err: any) {
+      if (err?.errorData) {
+        err.code = err.errorData.error || err.errorData.code;
+        err.response = err.errorData;
+      }
       throw err;
     }
-
-    return data as SkillsGapAnalysisResult;
   }
 };
