@@ -182,15 +182,15 @@ BEGIN
     -- F. Exact CHECK constraints for status/role/type, attempts, and JSON object metadata.
     FOR v_expected IN
       SELECT * FROM (VALUES
-        ('candidate_career_coach_threads','chk_candidate_career_coach_threads_status',ARRAY['active','archived']::text[]),
-        ('candidate_career_coach_messages','chk_candidate_career_coach_messages_role',ARRAY['user','assistant','system_event']::text[]),
-        ('candidate_career_coach_messages','chk_candidate_career_coach_messages_grounding_object',ARRAY['jsonb_typeof','object']::text[]),
-        ('candidate_career_coach_jobs','chk_candidate_career_coach_jobs_status',ARRAY['queued','processing','completed','failed_retryable','failed_permanent']::text[]),
-        ('candidate_career_coach_jobs','chk_candidate_career_coach_jobs_attempt_count',ARRAY['attempt_count >= 0']::text[]),
-        ('candidate_career_coach_jobs','chk_candidate_career_coach_jobs_started_at',ARRAY['processing','started_at is not null']::text[]),
-        ('candidate_career_coach_jobs','chk_candidate_career_coach_jobs_completed_at',ARRAY['completed','completed_at is not null']::text[]),
-        ('candidate_notifications','chk_candidate_notifications_type',ARRAY['career_coach_response','cv_parse_complete','job_alert','system']::text[])
-      ) AS checks_expected(table_name,constraint_name,required_tokens)
+        ('candidate_career_coach_threads','chk_candidate_career_coach_threads_status',ARRAY['active','archived']::text[],2),
+        ('candidate_career_coach_messages','chk_candidate_career_coach_messages_role',ARRAY['user','assistant','system_event']::text[],3),
+        ('candidate_career_coach_messages','chk_candidate_career_coach_messages_grounding_object',ARRAY['jsonb_typeof','object']::text[],1),
+        ('candidate_career_coach_jobs','chk_candidate_career_coach_jobs_status',ARRAY['queued','processing','completed','failed_retryable','failed_permanent']::text[],5),
+        ('candidate_career_coach_jobs','chk_candidate_career_coach_jobs_attempt_count',ARRAY['attempt_count >= 0']::text[],0),
+        ('candidate_career_coach_jobs','chk_candidate_career_coach_jobs_started_at',ARRAY['processing','started_at is not null']::text[],1),
+        ('candidate_career_coach_jobs','chk_candidate_career_coach_jobs_completed_at',ARRAY['completed','completed_at is not null']::text[],1),
+        ('candidate_notifications','chk_candidate_notifications_type',ARRAY['career_coach_response','cv_parse_complete','job_alert','system']::text[],4)
+      ) AS checks_expected(table_name,constraint_name,required_tokens,expected_literal_count)
     LOOP
       IF NOT EXISTS (
         SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid
@@ -200,6 +200,7 @@ BEGIN
           AND lower(pg_get_constraintdef(c.oid)) LIKE ALL (
             SELECT '%' || lower(token) || '%' FROM unnest(v_expected.required_tokens) AS token
           )
+          AND ((length(pg_get_constraintdef(c.oid)) - length(replace(pg_get_constraintdef(c.oid), '''', ''))) / 2) = v_expected.expected_literal_count
       ) THEN
         v_failed := array_append(v_failed, 'missing/mismatched CHECK constraint or allowed values: ' || v_expected.constraint_name);
       END IF;
