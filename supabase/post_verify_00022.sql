@@ -128,36 +128,37 @@ BEGIN
     -- D. Primary keys and unique ownership keys.
     FOR v_expected IN
       SELECT * FROM (VALUES
-        ('candidate_career_coach_threads','pk_candidate_career_coach_threads','p'),
-        ('candidate_career_coach_threads','uq_candidate_career_coach_threads_id_user','u'),
-        ('candidate_career_coach_messages','pk_candidate_career_coach_messages','p'),
-        ('candidate_career_coach_messages','uq_candidate_career_coach_messages_id_thread_user','u'),
-        ('candidate_career_coach_jobs','pk_candidate_career_coach_jobs','p'),
-        ('candidate_notifications','pk_candidate_notifications','p')
-      ) AS constraints_expected(table_name,constraint_name,constraint_type)
+        ('candidate_career_coach_threads','pk_candidate_career_coach_threads','p','PRIMARY KEY (id)'),
+        ('candidate_career_coach_threads','uq_candidate_career_coach_threads_id_user','u','UNIQUE (id, user_id)'),
+        ('candidate_career_coach_messages','pk_candidate_career_coach_messages','p','PRIMARY KEY (id)'),
+        ('candidate_career_coach_messages','uq_candidate_career_coach_messages_id_thread_user','u','UNIQUE (id, thread_id, user_id)'),
+        ('candidate_career_coach_jobs','pk_candidate_career_coach_jobs','p','PRIMARY KEY (id)'),
+        ('candidate_notifications','pk_candidate_notifications','p','PRIMARY KEY (id)')
+      ) AS constraints_expected(table_name,constraint_name,constraint_type,definition_fragment)
     LOOP
       IF NOT EXISTS (
         SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid
         JOIN pg_namespace n ON n.oid=t.relnamespace
         WHERE n.nspname='public' AND t.relname=v_expected.table_name
           AND c.conname=v_expected.constraint_name AND c.contype=v_expected.constraint_type
+          AND lower(pg_get_constraintdef(c.oid)) LIKE '%' || lower(v_expected.definition_fragment) || '%'
       ) THEN
-        v_failed := array_append(v_failed, 'missing/wrong key constraint: ' || v_expected.constraint_name);
+        v_failed := array_append(v_failed, 'missing/wrong key columns: ' || v_expected.constraint_name);
       END IF;
     END LOOP;
 
     -- E. Foreign key targets and ON DELETE behavior.
     FOR v_fk IN
       SELECT * FROM (VALUES
-        ('candidate_career_coach_threads','fk_candidate_career_coach_threads_user','profiles','c'),
-        ('candidate_career_coach_threads','fk_candidate_career_coach_threads_role','career_roles','n'),
-        ('candidate_career_coach_messages','fk_candidate_career_coach_messages_thread_owner','candidate_career_coach_threads','c'),
-        ('candidate_career_coach_messages','fk_candidate_career_coach_messages_user','profiles','c'),
-        ('candidate_career_coach_jobs','fk_candidate_career_coach_jobs_user','profiles','c'),
-        ('candidate_career_coach_jobs','fk_candidate_career_coach_jobs_thread_owner','candidate_career_coach_threads','c'),
-        ('candidate_career_coach_jobs','fk_candidate_career_coach_jobs_msg_owner','candidate_career_coach_messages','c'),
-        ('candidate_notifications','fk_candidate_notifications_user','profiles','c')
-      ) AS fks(table_name,constraint_name,referenced_table,delete_code)
+        ('candidate_career_coach_threads','fk_candidate_career_coach_threads_user','profiles','c','FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE'),
+        ('candidate_career_coach_threads','fk_candidate_career_coach_threads_role','career_roles','n','FOREIGN KEY (career_role_id) REFERENCES career_roles(id) ON DELETE SET NULL'),
+        ('candidate_career_coach_messages','fk_candidate_career_coach_messages_thread_owner','candidate_career_coach_threads','c','FOREIGN KEY (thread_id, user_id) REFERENCES candidate_career_coach_threads(id, user_id) ON DELETE CASCADE'),
+        ('candidate_career_coach_messages','fk_candidate_career_coach_messages_user','profiles','c','FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE'),
+        ('candidate_career_coach_jobs','fk_candidate_career_coach_jobs_user','profiles','c','FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE'),
+        ('candidate_career_coach_jobs','fk_candidate_career_coach_jobs_thread_owner','candidate_career_coach_threads','c','FOREIGN KEY (thread_id, user_id) REFERENCES candidate_career_coach_threads(id, user_id) ON DELETE CASCADE'),
+        ('candidate_career_coach_jobs','fk_candidate_career_coach_jobs_msg_owner','candidate_career_coach_messages','c','FOREIGN KEY (user_message_id, thread_id, user_id) REFERENCES candidate_career_coach_messages(id, thread_id, user_id) ON DELETE CASCADE'),
+        ('candidate_notifications','fk_candidate_notifications_user','profiles','c','FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE')
+      ) AS fks(table_name,constraint_name,referenced_table,delete_code,definition_fragment)
     LOOP
       IF NOT EXISTS (
         SELECT 1 FROM pg_constraint c
@@ -169,8 +170,9 @@ BEGIN
           AND c.conname=v_fk.constraint_name AND c.contype='f'
           AND rn.nspname='public' AND rt.relname=v_fk.referenced_table
           AND c.confdeltype=v_fk.delete_code
+          AND lower(pg_get_constraintdef(c.oid)) LIKE '%' || lower(v_fk.definition_fragment) || '%'
       ) THEN
-        v_failed := array_append(v_failed, format('FK target/delete rule mismatch: %s -> %s (delete code %s)',
+        v_failed := array_append(v_failed, format('FK columns/target/delete rule mismatch: %s -> %s (delete code %s)',
           v_fk.constraint_name,v_fk.referenced_table,v_fk.delete_code));
       END IF;
     END LOOP;
