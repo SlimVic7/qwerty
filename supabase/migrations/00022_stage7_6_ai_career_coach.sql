@@ -5,8 +5,9 @@
 
 BEGIN;
 
--- The migration runner owns the transaction. Keeping transaction control outside
--- this file allows the same DDL to be executed inside an explicit ROLLBACK dry-run.
+-- This migration is explicitly transactional. The rollback dry-run uses a temporary
+-- copy with only these boundary statements removed, then wraps the same DDL in its
+-- own transaction and rolls it back; the migration file itself remains unchanged.
 
 -- ----------------------------------------------------------------------------
 -- 1. candidate_career_coach_threads
