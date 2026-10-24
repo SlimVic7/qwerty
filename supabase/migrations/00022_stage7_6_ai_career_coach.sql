@@ -86,6 +86,7 @@ CREATE TABLE public.candidate_career_coach_jobs (
     CONSTRAINT fk_candidate_career_coach_jobs_user FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
     CONSTRAINT fk_candidate_career_coach_jobs_thread_owner FOREIGN KEY (thread_id, user_id) REFERENCES public.candidate_career_coach_threads(id, user_id) ON DELETE CASCADE,
     CONSTRAINT fk_candidate_career_coach_jobs_msg_owner FOREIGN KEY (user_message_id, thread_id, user_id) REFERENCES public.candidate_career_coach_messages(id, thread_id, user_id) ON DELETE CASCADE,
+    CONSTRAINT uq_candidate_career_coach_jobs_user_message UNIQUE (user_message_id),
     CONSTRAINT chk_candidate_career_coach_jobs_status CHECK (status IN ('queued', 'processing', 'completed', 'failed_retryable', 'failed_permanent')),
     CONSTRAINT chk_candidate_career_coach_jobs_attempt_count CHECK (attempt_count >= 0),
     CONSTRAINT chk_candidate_career_coach_jobs_started_at CHECK (status <> 'processing' OR started_at IS NOT NULL),
