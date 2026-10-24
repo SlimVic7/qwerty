@@ -98,7 +98,7 @@ describe('Stage 7.6 — AI Career Coach & Queue Hardening Suite', () => {
     it('enforces candidate job isolation for status polling', async () => {
       const thread = await CareerCoachStore.createThread('user-1');
       const msg = await CareerCoachStore.addMessage(thread.id, 'user-1', 'user', 'What should I learn?');
-      const job = await CareerCoachStore.createJob('user-1', thread.id, msg.id);
+      const job = await CareerCoachStore.createJob('user-1', thread.id, msg.id, 'test-configured-model');
 
       const jobUser1 = await CareerCoachStore.getJobById(job.id, 'user-1');
       expect(jobUser1).not.toBeNull();
