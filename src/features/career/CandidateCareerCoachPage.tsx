@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { authFetch } from '../../lib/authFetch.js';
 
 interface Thread {
   id: string;
@@ -108,11 +109,8 @@ export const CandidateCareerCoachPage: React.FC = () => {
   const fetchThreads = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/candidate/career/coach/threads');
-      if (res.ok) {
-        const data = await res.json();
-        setThreads(data.threads || []);
-      }
+      const data = await authFetch('/api/candidate/career/coach/threads');
+      setThreads(data.threads || []);
     } catch (err) {
       console.error('Failed to fetch coach threads:', err);
     } finally {
@@ -122,11 +120,8 @@ export const CandidateCareerCoachPage: React.FC = () => {
 
   const fetchThreadMessages = async (threadId: string) => {
     try {
-      const res = await fetch(`/api/candidate/career/coach/threads/${threadId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setMessages(data.messages || []);
-      }
+      const data = await authFetch(`/api/candidate/career/coach/threads/${threadId}`);
+      setMessages(data.messages || []);
     } catch (err) {
       console.error('Failed to fetch thread messages:', err);
     }
@@ -134,18 +129,14 @@ export const CandidateCareerCoachPage: React.FC = () => {
 
   const handleStartNewThread = async () => {
     try {
-      const res = await fetch('/api/candidate/career/coach/threads', {
+      const data = await authFetch('/api/candidate/career/coach/threads', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: 'New Career Coaching Session' })
       });
-      if (res.ok) {
-        const data = await res.json();
-        setThreads((prev) => [data.thread, ...prev]);
-        setActiveThreadId(data.thread.id);
-        setSearchParams({ threadId: data.thread.id });
-        setMessages([]);
-      }
+      setThreads((prev) => [data.thread, ...prev]);
+      setActiveThreadId(data.thread.id);
+      setSearchParams({ threadId: data.thread.id });
+      setMessages([]);
     } catch (err) {
       setError('Failed to create new conversation');
     }
@@ -153,20 +144,15 @@ export const CandidateCareerCoachPage: React.FC = () => {
 
   const checkJobStatus = async (jobId: string) => {
     try {
-      const res = await fetch(`/api/candidate/career/coach/jobs/${jobId}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === 'completed') {
-          setJobStatus('completed');
-          setActiveJobId(null);
-          if (activeThreadId) {
-            await fetchThreadMessages(activeThreadId);
-          }
-        } else if (data.status === 'failed_permanent' || data.status === 'failed_retryable') {
-          setJobStatus('failed');
-          setActiveJobId(null);
-          setError("We couldn't finish processing this request yet. Please try again.");
-        }
+      const data = await authFetch(`/api/candidate/career/coach/jobs/${jobId}`);
+      if (data.status === 'completed') {
+        setJobStatus('completed');
+        setActiveJobId(null);
+        if (activeThreadId) await fetchThreadMessages(activeThreadId);
+      } else if (data.status === 'failed_permanent' || data.status === 'failed_retryable') {
+        setJobStatus('failed');
+        setActiveJobId(null);
+        setError("We couldn't finish processing this request yet. Please try again.");
       }
     } catch (err) {
       console.error('Error checking coach job status:', err);
@@ -185,18 +171,14 @@ export const CandidateCareerCoachPage: React.FC = () => {
     // Create thread if none exists
     if (!currentThreadId) {
       try {
-        const createRes = await fetch('/api/candidate/career/coach/threads', {
+        const createData = await authFetch('/api/candidate/career/coach/threads', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title: query.slice(0, 30) + '...' })
         });
-        if (createRes.ok) {
-          const createData = await createRes.json();
-          currentThreadId = createData.thread.id;
-          setActiveThreadId(currentThreadId);
-          setThreads((prev) => [createData.thread, ...prev]);
-          setSearchParams({ threadId: currentThreadId! });
-        }
+        currentThreadId = createData.thread.id;
+        setActiveThreadId(currentThreadId);
+        setThreads((prev) => [createData.thread, ...prev]);
+        setSearchParams({ threadId: currentThreadId! });
       } catch (err) {
         setError('Failed to start thread');
         return;
@@ -217,21 +199,12 @@ export const CandidateCareerCoachPage: React.FC = () => {
     // Submit question to async API
     setJobStatus('queued');
     try {
-      const res = await fetch(`/api/candidate/career/coach/threads/${currentThreadId}/messages`, {
+      const data = await authFetch(`/api/candidate/career/coach/threads/${currentThreadId}/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: query })
       });
-
-      if (res.status === 202) {
-        const data = await res.json();
-        setActiveJobId(data.job_id);
-        setJobStatus('processing');
-      } else {
-        const errData = await res.json();
-        setError(errData.message || 'Failed to submit message');
-        setJobStatus('failed');
-      }
+      setActiveJobId(data.job_id);
+      setJobStatus('processing');
     } catch (err) {
       setError('Connection error. Please try again.');
       setJobStatus('failed');

@@ -30,7 +30,7 @@ CREATE INDEX idx_candidate_career_coach_threads_role ON public.candidate_career_
 CREATE TRIGGER set_candidate_career_coach_threads_updated_at
     BEFORE UPDATE ON public.candidate_career_coach_threads
     FOR EACH ROW
-    EXECUTE FUNCTION public.set_updated_at();
+    EXECUTE FUNCTION public.set_current_timestamp_updated_at();
 
 -- ----------------------------------------------------------------------------
 -- 2. candidate_career_coach_messages
@@ -87,7 +87,7 @@ CREATE INDEX idx_candidate_career_coach_jobs_thread ON public.candidate_career_c
 CREATE TRIGGER set_candidate_career_coach_jobs_updated_at
     BEFORE UPDATE ON public.candidate_career_coach_jobs
     FOR EACH ROW
-    EXECUTE FUNCTION public.set_updated_at();
+    EXECUTE FUNCTION public.set_current_timestamp_updated_at();
 
 -- ----------------------------------------------------------------------------
 -- 4. candidate_notifications
