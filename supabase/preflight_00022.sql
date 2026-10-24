@@ -17,7 +17,8 @@ DECLARE
       'career_course_recommendations',
       'candidate_development_plans',
       'candidate_development_plan_items',
-      'candidate_cv_parses'
+      'candidate_cv_parses',
+      'candidate_cv_versions'
     ];
     v_targets text[] := ARRAY[
       'candidate_career_coach_threads',
@@ -54,6 +55,7 @@ DECLARE
       'idx_candidate_career_coach_threads_role',
       'idx_candidate_career_coach_messages_thread',
       'idx_candidate_career_coach_messages_user',
+      'uq_candidate_career_coach_messages_assistant_job',
       'idx_candidate_career_coach_jobs_queue',
       'idx_candidate_career_coach_jobs_user',
       'idx_candidate_career_coach_jobs_thread',
@@ -106,7 +108,7 @@ BEGIN
     FOREACH v_table IN ARRAY ARRAY[
       'profiles','career_roles','career_role_roadmaps','career_role_roadmap_items',
       'career_learning_resources','career_course_recommendations',
-      'candidate_development_plans','candidate_development_plan_items','candidate_cv_parses'
+      'candidate_development_plans','candidate_development_plan_items','candidate_cv_parses','candidate_cv_versions'
     ] LOOP
       IF to_regclass(format('%I.%I', 'public', v_table)) IS NOT NULL THEN
         IF NOT EXISTS (
@@ -117,12 +119,37 @@ BEGIN
         END IF;
       END IF;
     END LOOP;
+    IF to_regclass('public.candidate_cv_versions') IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='candidate_cv_versions'
+        AND column_name='user_id' AND data_type='uuid'
+    ) THEN
+      v_failed := array_append(v_failed, 'expected UUID candidate_cv_versions.user_id');
+    END IF;
     IF to_regclass('public.candidate_cv_parses') IS NOT NULL AND NOT EXISTS (
       SELECT 1 FROM information_schema.columns
       WHERE table_schema='public' AND table_name='candidate_cv_parses'
         AND column_name='user_id' AND data_type='uuid'
     ) THEN
       v_failed := array_append(v_failed, 'expected UUID candidate_cv_parses.user_id');
+    END IF;
+
+    -- Columns queried directly by the context-generation code.
+    IF to_regclass('public.profiles') IS NOT NULL THEN
+      FOREACH v_col IN ARRAY ARRAY['full_name','headline','skills'] LOOP
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+          WHERE table_schema='public' AND table_name='profiles' AND column_name=v_col) THEN
+          v_failed := array_append(v_failed, 'missing context column: public.profiles.' || v_col);
+        END IF;
+      END LOOP;
+    END IF;
+    IF to_regclass('public.candidate_cv_parses') IS NOT NULL THEN
+      FOREACH v_col IN ARRAY ARRAY['user_id','status','completed_at','extracted_data'] LOOP
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+          WHERE table_schema='public' AND table_name='candidate_cv_parses' AND column_name=v_col) THEN
+          v_failed := array_append(v_failed, 'missing context column: public.candidate_cv_parses.' || v_col);
+        END IF;
+      END LOOP;
     END IF;
 
     -- 4. Require the canonical timestamp helper and database roles.
