@@ -3,7 +3,8 @@
 -- Migration: 00022_stage7_6_ai_career_coach.sql
 -- ============================================================================
 
-BEGIN;
+-- The migration runner owns the transaction. Keeping transaction control outside
+-- this file allows the same DDL to be executed inside an explicit ROLLBACK dry-run.
 
 -- ----------------------------------------------------------------------------
 -- 1. candidate_career_coach_threads
@@ -143,4 +144,3 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.candidate_career_coach_messages T
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.candidate_career_coach_jobs TO service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.candidate_notifications TO service_role;
 
-COMMIT;
