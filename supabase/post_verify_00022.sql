@@ -95,6 +95,7 @@ BEGIN
       SELECT * FROM (VALUES
         ('candidate_career_coach_threads','id','gen_random_uuid'),
         ('candidate_career_coach_threads','status','active'),
+        ('candidate_career_coach_threads','title','Career Coaching Session'),
         ('candidate_career_coach_threads','created_at','CURRENT_TIMESTAMP'),
         ('candidate_career_coach_threads','updated_at','CURRENT_TIMESTAMP'),
         ('candidate_career_coach_messages','id','gen_random_uuid'),
@@ -210,6 +211,7 @@ BEGIN
         ('idx_candidate_career_coach_threads_role','candidate_career_coach_threads'),
         ('idx_candidate_career_coach_messages_thread','candidate_career_coach_messages'),
         ('idx_candidate_career_coach_messages_user','candidate_career_coach_messages'),
+        ('uq_candidate_career_coach_messages_assistant_job','candidate_career_coach_messages'),
         ('idx_candidate_career_coach_jobs_queue','candidate_career_coach_jobs'),
         ('idx_candidate_career_coach_jobs_user','candidate_career_coach_jobs'),
         ('idx_candidate_career_coach_jobs_thread','candidate_career_coach_jobs'),
@@ -224,9 +226,19 @@ BEGIN
         WHERE ns.nspname='public' AND i.relname=v_expected.index_name
           AND tn.nspname='public' AND t.relname=v_expected.table_name
           AND ix.indisvalid AND ix.indisready
-          AND (v_expected.index_name NOT LIKE 'uq_candidate_notifications%'
-            OR (ix.indisunique AND pg_get_expr(ix.indpred,ix.indrelid) LIKE '%career_coach_response%'
-                AND pg_get_expr(ix.indpred,ix.indrelid) LIKE '%jobId%'))
+          AND CASE
+            WHEN v_expected.index_name='uq_candidate_notifications_career_coach_job_link' THEN
+              ix.indisunique
+              AND pg_get_expr(ix.indpred,ix.indrelid) LIKE '%career_coach_response%'
+              AND pg_get_expr(ix.indpred,ix.indrelid) LIKE '%jobId%'
+              AND pg_get_indexdef(i.oid) LIKE '%(link_url)%'
+            WHEN v_expected.index_name='uq_candidate_career_coach_messages_assistant_job' THEN
+              ix.indisunique
+              AND pg_get_expr(ix.indexprs,ix.indrelid) LIKE '%grounding_metadata%'
+              AND pg_get_expr(ix.indpred,ix.indrelid) LIKE '%assistant%'
+              AND pg_get_expr(ix.indpred,ix.indrelid) LIKE '%job_id%'
+            ELSE true
+          END
       ) THEN
         v_failed := array_append(v_failed, 'missing/invalid index or notification unique predicate: ' || v_expected.index_name);
       END IF;
