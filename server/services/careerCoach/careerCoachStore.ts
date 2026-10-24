@@ -230,10 +230,10 @@ export class CareerCoachStore {
     return message;
   }
 
-  static async createJob(userId: string, threadId: string, userMessageId: string): Promise<CoachJob> {
+  static async createJob(userId: string, threadId: string, userMessageId: string, model: string): Promise<CoachJob> {
     const { data, error } = await getAdminClient().from('candidate_career_coach_jobs').insert({
       id: uuidv4(), user_id: userId, thread_id: threadId, user_message_id: userMessageId,
-      status: 'queued', provider: 'gemini', model: 'gemini-2.5-flash'
+      status: 'queued', provider: 'gemini', model
     }).select('*').single();
     throwOnDatabaseError(error, 'create job');
     return requirePersistedRow(data as CoachJob | null, 'create job');
