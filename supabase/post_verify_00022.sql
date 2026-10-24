@@ -134,6 +134,7 @@ BEGIN
         ('candidate_career_coach_messages','pk_candidate_career_coach_messages','p','PRIMARY KEY (id)'),
         ('candidate_career_coach_messages','uq_candidate_career_coach_messages_id_thread_user','u','UNIQUE (id, thread_id, user_id)'),
         ('candidate_career_coach_jobs','pk_candidate_career_coach_jobs','p','PRIMARY KEY (id)'),
+        ('candidate_career_coach_jobs','uq_candidate_career_coach_jobs_user_message','u','UNIQUE (user_message_id)'),
         ('candidate_notifications','pk_candidate_notifications','p','PRIMARY KEY (id)')
       ) AS constraints_expected(table_name,constraint_name,constraint_type,definition_fragment)
     LOOP
@@ -212,6 +213,7 @@ BEGIN
         ('idx_candidate_career_coach_messages_thread','candidate_career_coach_messages'),
         ('idx_candidate_career_coach_messages_user','candidate_career_coach_messages'),
         ('uq_candidate_career_coach_messages_assistant_job','candidate_career_coach_messages'),
+        ('uq_candidate_career_coach_jobs_user_message','candidate_career_coach_jobs'),
         ('idx_candidate_career_coach_jobs_queue','candidate_career_coach_jobs'),
         ('idx_candidate_career_coach_jobs_user','candidate_career_coach_jobs'),
         ('idx_candidate_career_coach_jobs_thread','candidate_career_coach_jobs'),
