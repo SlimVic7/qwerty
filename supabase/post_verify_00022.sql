@@ -278,6 +278,13 @@ BEGIN
       v_failed := array_append(v_failed, 'direct RLS policies exist; expected policy count is zero');
     END IF;
 
+    -- Required database roles must still exist after deployment.
+    FOREACH v_table IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=v_table) THEN
+        v_failed := array_append(v_failed, 'missing required database role: ' || v_table);
+      END IF;
+    END LOOP;
+
     -- K/L. Direct table privileges: PUBLIC, anon, authenticated = zero;
     -- service_role = exactly SELECT/INSERT/UPDATE/DELETE on each target.
     IF EXISTS (
