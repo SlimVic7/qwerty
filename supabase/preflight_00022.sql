@@ -80,6 +80,15 @@ DECLARE
 BEGIN
     RAISE NOTICE 'Starting read-only Stage 7.6 preflight';
 
+    -- Migration 00022 uses gen_random_uuid() for every target-table ID.
+    -- Check common built-in/extension schemas without calling the function, so
+    -- a missing UUID generator becomes a clean false gate rather than a DDL error.
+    IF to_regprocedure('pg_catalog.gen_random_uuid()') IS NULL
+       AND to_regprocedure('public.gen_random_uuid()') IS NULL
+       AND to_regprocedure('extensions.gen_random_uuid()') IS NULL THEN
+      v_failed := array_append(v_failed, 'required UUID generator gen_random_uuid() is unavailable');
+    END IF;
+
     -- 1. Check prerequisites first. No dependent table is queried until its
     -- existence has been established.
     FOREACH v_table IN ARRAY v_required_tables LOOP
