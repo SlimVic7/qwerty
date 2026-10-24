@@ -20,6 +20,7 @@ CREATE TABLE public.candidate_career_coach_threads (
     CONSTRAINT pk_candidate_career_coach_threads PRIMARY KEY (id),
     CONSTRAINT fk_candidate_career_coach_threads_user FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
     CONSTRAINT fk_candidate_career_coach_threads_role FOREIGN KEY (career_role_id) REFERENCES public.career_roles(id) ON DELETE SET NULL,
+    CONSTRAINT uq_candidate_career_coach_threads_id_user UNIQUE (id, user_id),
     CONSTRAINT chk_candidate_career_coach_threads_status CHECK (status IN ('active', 'archived'))
 );
 
@@ -45,9 +46,11 @@ CREATE TABLE public.candidate_career_coach_messages (
     grounding_metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
     created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT pk_candidate_career_coach_messages PRIMARY KEY (id),
-    CONSTRAINT fk_candidate_career_coach_messages_thread FOREIGN KEY (thread_id) REFERENCES public.candidate_career_coach_threads(id) ON DELETE CASCADE,
+    CONSTRAINT fk_candidate_career_coach_messages_thread_owner FOREIGN KEY (thread_id, user_id) REFERENCES public.candidate_career_coach_threads(id, user_id) ON DELETE CASCADE,
     CONSTRAINT fk_candidate_career_coach_messages_user FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
-    CONSTRAINT chk_candidate_career_coach_messages_role CHECK (role IN ('user', 'assistant', 'system_event'))
+    CONSTRAINT uq_candidate_career_coach_messages_id_thread_user UNIQUE (id, thread_id, user_id),
+    CONSTRAINT chk_candidate_career_coach_messages_role CHECK (role IN ('user', 'assistant', 'system_event')),
+    CONSTRAINT chk_candidate_career_coach_messages_grounding_object CHECK (jsonb_typeof(grounding_metadata) = 'object')
 );
 
 CREATE INDEX idx_candidate_career_coach_messages_thread ON public.candidate_career_coach_messages(thread_id, created_at ASC);
@@ -74,9 +77,12 @@ CREATE TABLE public.candidate_career_coach_jobs (
     updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT pk_candidate_career_coach_jobs PRIMARY KEY (id),
     CONSTRAINT fk_candidate_career_coach_jobs_user FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE,
-    CONSTRAINT fk_candidate_career_coach_jobs_thread FOREIGN KEY (thread_id) REFERENCES public.candidate_career_coach_threads(id) ON DELETE CASCADE,
-    CONSTRAINT fk_candidate_career_coach_jobs_msg FOREIGN KEY (user_message_id) REFERENCES public.candidate_career_coach_messages(id) ON DELETE CASCADE,
-    CONSTRAINT chk_candidate_career_coach_jobs_status CHECK (status IN ('queued', 'processing', 'completed', 'failed_retryable', 'failed_permanent'))
+    CONSTRAINT fk_candidate_career_coach_jobs_thread_owner FOREIGN KEY (thread_id, user_id) REFERENCES public.candidate_career_coach_threads(id, user_id) ON DELETE CASCADE,
+    CONSTRAINT fk_candidate_career_coach_jobs_msg_owner FOREIGN KEY (user_message_id, thread_id, user_id) REFERENCES public.candidate_career_coach_messages(id, thread_id, user_id) ON DELETE CASCADE,
+    CONSTRAINT chk_candidate_career_coach_jobs_status CHECK (status IN ('queued', 'processing', 'completed', 'failed_retryable', 'failed_permanent')),
+    CONSTRAINT chk_candidate_career_coach_jobs_attempt_count CHECK (attempt_count >= 0),
+    CONSTRAINT chk_candidate_career_coach_jobs_started_at CHECK ((status = 'processing') = (started_at IS NOT NULL)),
+    CONSTRAINT chk_candidate_career_coach_jobs_completed_at CHECK ((status = 'completed') = (completed_at IS NOT NULL))
 );
 
 CREATE INDEX idx_candidate_career_coach_jobs_queue ON public.candidate_career_coach_jobs(status, available_at) WHERE status IN ('queued', 'failed_retryable');
@@ -108,6 +114,14 @@ CREATE TABLE public.candidate_notifications (
 );
 
 CREATE INDEX idx_candidate_notifications_user ON public.candidate_notifications(user_id, is_read, created_at DESC);
+
+-- Batch 2 locates completion notifications by their deterministic job-specific URL.
+-- The partial unique index is the database-enforced race barrier: concurrent workers
+-- cannot persist two Career Coach completion notifications for the same job URL.
+CREATE UNIQUE INDEX uq_candidate_notifications_career_coach_job_link
+    ON public.candidate_notifications(link_url)
+    WHERE type = 'career_coach_response'
+      AND link_url LIKE '%&jobId=%';
 
 -- ----------------------------------------------------------------------------
 -- 5. RLS & PERMISSIONS
