@@ -57,6 +57,12 @@ CREATE TABLE public.candidate_career_coach_messages (
 CREATE INDEX idx_candidate_career_coach_messages_thread ON public.candidate_career_coach_messages(thread_id, created_at ASC);
 CREATE INDEX idx_candidate_career_coach_messages_user ON public.candidate_career_coach_messages(user_id);
 
+-- Batch 2 uses grounding_metadata.job_id to find an already-persisted assistant
+-- response after a partial completion. Enforce one assistant response per job.
+CREATE UNIQUE INDEX uq_candidate_career_coach_messages_assistant_job
+    ON public.candidate_career_coach_messages ((grounding_metadata ->> 'job_id'))
+    WHERE role = 'assistant' AND grounding_metadata ? 'job_id';
+
 -- ----------------------------------------------------------------------------
 -- 3. candidate_career_coach_jobs
 -- Asynchronous durable queue for processing Gemini Career Coach requests
