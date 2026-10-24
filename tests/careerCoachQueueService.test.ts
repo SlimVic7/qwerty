@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   activeProviderCalls: 0,
   maxProviderCalls: 0,
   providerCalls: 0,
+  successfulClaims: [] as string[],
   notificationFailures: 0,
   suppressRetryWake: false
 }));
@@ -18,6 +19,7 @@ vi.mock('../server/services/careerCoach/careerCoachStore.js', () => ({
       const job = state.jobs.get(id);
       if (!job || job.status !== 'queued' || new Date(job.available_at).getTime() > Date.now()) return null;
       job.status = 'processing';
+      state.successfulClaims.push(id);
       job.started_at = new Date().toISOString();
       job.updated_at = job.started_at;
       return { ...job };
@@ -27,7 +29,7 @@ vi.mock('../server/services/careerCoach/careerCoachStore.js', () => ({
       .sort((a, b) => a.created_at.localeCompare(b.created_at)).slice(0, limit).map((job) => ({ id: job.id }))),
     requeueDueRetryableJobs: vi.fn(async (maxAttempts: number, limit: number) => {
       let count = 0;
-      for (const job of [...state.jobs.values()].filter((job) => job.status === 'failed_retryable' &&
+      for (const job of [...state.jobs.values()].filter((job) => job.status === 'failed_retryable' && !state.suppressRetryWake &&
         new Date(job.available_at).getTime() <= Date.now() && job.attempt_count < maxAttempts).slice(0, limit)) {
         job.status = 'queued'; job.started_at = null; count++;
       }
@@ -138,7 +140,7 @@ async function waitForCondition(predicate: () => boolean, timeoutMs = 10000) {
 describe('Stage 7.6 Career Coach queue service', () => {
   beforeEach(() => {
     state.jobs.clear(); state.threads.clear(); state.messages = []; state.notifications = [];
-    state.activeProviderCalls = 0; state.maxProviderCalls = 0; state.providerCalls = 0; state.notificationFailures = 0; state.suppressRetryWake = false;
+    state.activeProviderCalls = 0; state.maxProviderCalls = 0; state.providerCalls = 0; state.successfulClaims = []; state.notificationFailures = 0; state.suppressRetryWake = false;
     resetCareerCoachQueueForTests();
     setCareerCoachProviderForTests(async () => { state.providerCalls++; return 'Evidence-grounded response'; });
   });
@@ -179,6 +181,8 @@ describe('Stage 7.6 Career Coach queue service', () => {
     await CareerCoachQueueService.processPendingJobs(1000);
     await waitForCondition(() => [...state.jobs.values()].every((job) => job.status === 'completed' || job.status === 'failed_retryable'), 20000);
     const firstWaveRetryable = [...state.jobs.values()].filter((job) => job.status === 'failed_retryable');
+    expect(CareerCoachStore.markJobRetryable).toHaveBeenCalledTimes(50);
+    expect(CareerCoachStore.markJobRetryable.mock.calls.every((call) => call[3] === 'PROVIDER_RATE_LIMITED')).toBe(true);
     expect(firstWaveRetryable).toHaveLength(50);
     firstWaveRetryable.forEach((job) => { job.available_at = new Date(Date.now() - 1000).toISOString(); });
     state.suppressRetryWake = false;
@@ -191,7 +195,12 @@ describe('Stage 7.6 Career Coach queue service', () => {
     expect(jobs).toHaveLength(1000);
     expect(jobs.every((job) => job.status === 'completed')).toBe(true);
     expect(state.providerCalls).toBe(1050);
-    expect(state.maxProviderCalls).toBeLessThanOrEqual(3);
+    expect(state.maxProviderCalls).toBeLessThanOrEqual(CAREER_COACH_MAX_CONCURRENT_WORKERS);
+    expect(state.successfulClaims).toHaveLength(1050);
+    const successfulClaimsByJob = new Map<string, number>();
+    for (const id of state.successfulClaims) successfulClaimsByJob.set(id, (successfulClaimsByJob.get(id) || 0) + 1);
+    expect(jobs.every((job) => successfulClaimsByJob.get(job.id) === job.attempt_count + 1)).toBe(true);
+    expect(jobs.every((job) => job.attempt_count < CAREER_COACH_MAX_ATTEMPTS)).toBe(true);
     const successfulAssistantMessages = state.messages.filter((m) => m.role === 'assistant');
     expect(successfulAssistantMessages).toHaveLength(1000);
     expect(new Set(successfulAssistantMessages.map((m) => m.grounding_metadata.job_id)).size).toBe(1000);
@@ -299,10 +308,11 @@ describe('Stage 7.6 Career Coach queue service', () => {
     const first = await CareerCoachQueueService.claimAndRunJob(job.id);
     expect(first?.status).toBe('failed_retryable');
     expect(state.messages.filter((m) => m.role === 'assistant' && m.grounding_metadata.job_id === job.id)).toHaveLength(1);
-    job.available_at = new Date(Date.now() - 1000).toISOString();
-    await CareerCoachQueueService.processPendingJobs(10);
-    await waitForCondition(() => job.status === 'completed');
+    // Let the real retry-wake timer make the retry eligible and dispatch it. Mutating
+    // available_at here races the in-flight discovery pass and can suppress the only wake.
+    await waitForCondition(() => job.status === 'completed', 10000);
     expect(state.providerCalls).toBe(1);
+    expect(state.messages.filter((m) => m.role === 'assistant' && m.grounding_metadata.job_id === job.id)).toHaveLength(1);
     expect(state.notifications).toHaveLength(1);
   });
 
