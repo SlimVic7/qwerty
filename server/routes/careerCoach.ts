@@ -1,6 +1,6 @@
 import express from 'express';
 import { CareerCoachStore } from '../services/careerCoach/careerCoachStore.js';
-import { CareerCoachQueueService } from '../services/careerCoach/careerCoachQueueService.js';
+import { CAREER_COACH_MODEL, CareerCoachQueueService } from '../services/careerCoach/careerCoachQueueService.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 
 export const careerCoachRouter = express.Router();
@@ -46,7 +46,7 @@ careerCoachRouter.post('/threads', async (req, res, next) => {
 
     if (initial_message && typeof initial_message === 'string' && initial_message.trim().length > 0) {
       initialUserMsg = await CareerCoachStore.addMessage(thread.id, userId, 'user', initial_message.trim());
-      initialJob = await CareerCoachStore.createJob(userId, thread.id, initialUserMsg.id);
+      initialJob = await CareerCoachStore.createJob(userId, thread.id, initialUserMsg.id, CAREER_COACH_MODEL);
       CareerCoachQueueService.triggerWorker(initialJob.id);
     }
 
@@ -134,7 +134,7 @@ careerCoachRouter.post('/threads/:threadId/messages', async (req, res, next) => 
     const userMsg = await CareerCoachStore.addMessage(threadId, userId, 'user', content.trim());
 
     // Create durable queue job
-    const job = await CareerCoachStore.createJob(userId, threadId, userMsg.id);
+    const job = await CareerCoachStore.createJob(userId, threadId, userMsg.id, CAREER_COACH_MODEL);
 
     // Trigger asynchronous worker (unblocked HTTP response)
     CareerCoachQueueService.triggerWorker(job.id);
