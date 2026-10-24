@@ -26,3 +26,35 @@
 5. **Hallucination & Grounding Benchmark Suite**:
    - *Status*: Deferred.
    - *Current Implementation*: Strict evidence-safe system prompt instructions, clear source attribution, and ground context verification.
+
+
+### Stage 7.6 — Queue Operations & Scale Controls
+
+6. **Distributed/Global Gemini Concurrency Control**:
+   - *Status*: Deferred; current queue concurrency is strictly per Node.js process only.
+   - *Current Safety*: PostgreSQL conditional claims prevent two instances from successfully claiming the same queued job; this is not a global provider concurrency/quota limit.
+   - *Future Plan*: Add a shared distributed limiter before horizontal scale-out.
+
+7. **Provider Quota Dashboard**:
+   - *Status*: Deferred.
+   - *Future Plan*: Dashboard for provider quota, 429s, token consumption, latency and cost.
+
+8. **Queue Depth Monitoring**:
+   - *Status*: Deferred.
+   - *Future Plan*: Alert on queued/due retryable counts and oldest eligible-job age.
+
+9. **Processing Latency Metrics**:
+   - *Status*: Deferred.
+   - *Future Plan*: Record queue wait time, provider duration, end-to-end duration and timeout rates.
+
+10. **Retry Metrics**:
+    - *Status*: Deferred.
+    - *Future Plan*: Track retry attempts, backoff, 429/5xx/network errors and exhausted attempts.
+
+11. **Dead-Letter / Terminal Failure Operations**:
+    - *Status*: Deferred.
+    - *Future Plan*: Admin-only inspection, safe redrive, and documented terminal-failure resolution.
+
+12. **Multi-Instance Load / Soak Testing**:
+    - *Status*: Required before horizontal scale-out.
+    - *Future Plan*: Exercise competing database claims, stale recovery boundaries, provider throttling, and sustained queue drainage across multiple Node processes.

@@ -60,6 +60,127 @@ function requirePersistedRow<T>(data: T | null | undefined, operation: string): 
 }
 
 export class CareerCoachStore {
+  private static queueClient() {
+    const client = getAdminClient();
+    if (!client) throw new Error('Career Coach database client is not configured');
+    return client;
+  }
+
+  /** PostgreSQL compare-and-set claim. A missing returned row means no claim. */
+  static async claimQueuedJob(jobId: string): Promise<CoachJob | null> {
+    const now = new Date().toISOString();
+    const { data, error } = await this.queueClient().from('candidate_career_coach_jobs')
+      .update({ status: 'processing', started_at: now, updated_at: now })
+      .eq('id', jobId).eq('status', 'queued').lte('available_at', now).select('*').maybeSingle();
+    throwOnDatabaseError(error, 'atomic queued job claim');
+    return (data as CoachJob | null) || null;
+  }
+
+  static async listEligibleQueuedJobs(limit: number): Promise<Array<Pick<CoachJob, 'id'>>> {
+    const now = new Date().toISOString();
+    const { data, error } = await this.queueClient().from('candidate_career_coach_jobs')
+      .select('id').eq('status', 'queued').lte('available_at', now).order('created_at', { ascending: true }).limit(limit);
+    throwOnDatabaseError(error, 'list eligible queued jobs');
+    return (data || []) as Array<Pick<CoachJob, 'id'>>;
+  }
+
+  /** Requeue due retryable rows conditionally; normal queued -> processing claim follows. */
+  static async requeueDueRetryableJobs(maxAttempts: number, limit: number): Promise<number> {
+    const now = new Date().toISOString();
+    const { data, error } = await this.queueClient().from('candidate_career_coach_jobs')
+      .select('id').eq('status', 'failed_retryable').lte('available_at', now)
+      .lt('attempt_count', maxAttempts).order('available_at', { ascending: true }).limit(limit);
+    throwOnDatabaseError(error, 'list due retryable jobs');
+    let count = 0;
+    for (const candidate of data || []) {
+      const { data: updated, error: updateError } = await this.queueClient().from('candidate_career_coach_jobs')
+        .update({ status: 'queued', started_at: null, updated_at: now })
+        .eq('id', candidate.id).eq('status', 'failed_retryable').lte('available_at', now)
+        .lt('attempt_count', maxAttempts).select('id').maybeSingle();
+      throwOnDatabaseError(updateError, 'requeue due retryable job');
+      if (updated) count += 1;
+    }
+    return count;
+  }
+
+  static async getNextRetryableAvailableAt(maxAttempts: number): Promise<string | null> {
+    const { data, error } = await this.queueClient().from('candidate_career_coach_jobs')
+      .select('available_at').eq('status', 'failed_retryable').lt('attempt_count', maxAttempts)
+      .order('available_at', { ascending: true }).limit(1).maybeSingle();
+    throwOnDatabaseError(error, 'get next retry availability');
+    return data?.available_at || null;
+  }
+
+  /** Recover stale processing rows idempotently while counting lost attempts against the retry cap. */
+  static async recoverStaleProcessingJobs(cutoffIso: string, maxAttempts: number): Promise<number> {
+    const { data, error } = await this.queueClient().from('candidate_career_coach_jobs')
+      .select('id, attempt_count').eq('status', 'processing').lte('started_at', cutoffIso);
+    throwOnDatabaseError(error, 'list stale processing jobs');
+    let recovered = 0;
+    for (const candidate of data || []) {
+      const nextAttempt = Number(candidate.attempt_count || 0) + 1;
+      const now = new Date().toISOString();
+      const terminal = nextAttempt >= maxAttempts;
+      const { data: updated, error: updateError } = await this.queueClient().from('candidate_career_coach_jobs')
+        .update({
+          status: terminal ? 'failed_permanent' : 'queued',
+          attempt_count: nextAttempt,
+          started_at: null,
+          available_at: now,
+          error_code: terminal ? 'STALE_WORKER_ATTEMPT_LIMIT' : 'STALE_WORKER_RECOVERED',
+          updated_at: now
+        })
+        .eq('id', candidate.id).eq('status', 'processing')
+        .eq('attempt_count', Number(candidate.attempt_count || 0))
+        .lte('started_at', cutoffIso).select('id').maybeSingle();
+      throwOnDatabaseError(updateError, 'recover stale processing job');
+      if (updated) recovered += 1;
+    }
+    return recovered;
+  }
+
+  static async getAssistantResponseForJob(jobId: string, userId: string): Promise<CoachMessage | null> {
+    const { data, error } = await this.queueClient().from('candidate_career_coach_messages')
+      .select('*').eq('user_id', userId).eq('role', 'assistant')
+      .contains('grounding_metadata', { job_id: jobId }).maybeSingle();
+    throwOnDatabaseError(error, 'find persisted assistant response');
+    return (data as CoachMessage | null) || null;
+  }
+
+  static async getNotificationForJob(userId: string, jobId: string, threadId: string): Promise<CandidateNotification | null> {
+    const { data, error } = await this.queueClient().from('candidate_notifications')
+      .select('*').eq('user_id', userId)
+      .eq('link_url', `/candidate/career/coach?threadId=${threadId}&jobId=${jobId}`).maybeSingle();
+    throwOnDatabaseError(error, 'find completion notification');
+    return (data as CandidateNotification | null) || null;
+  }
+
+  static async markJobRetryable(jobId: string, attempts: number, availableAt: string, errorCode: string): Promise<CoachJob> {
+    const now = new Date().toISOString();
+    const { data, error } = await this.queueClient().from('candidate_career_coach_jobs')
+      .update({ status: 'failed_retryable', attempt_count: attempts, available_at: availableAt, error_code: errorCode, started_at: null, updated_at: now })
+      .eq('id', jobId).eq('status', 'processing').select('*').maybeSingle();
+    throwOnDatabaseError(error, 'mark job retryable');
+    return requirePersistedRow(data as CoachJob | null, 'mark job retryable');
+  }
+
+  static async markJobFailedPermanent(jobId: string, attempts: number, errorCode: string): Promise<CoachJob> {
+    const now = new Date().toISOString();
+    const { data, error } = await this.queueClient().from('candidate_career_coach_jobs')
+      .update({ status: 'failed_permanent', attempt_count: attempts, error_code: errorCode, started_at: null, updated_at: now })
+      .eq('id', jobId).eq('status', 'processing').select('*').maybeSingle();
+    throwOnDatabaseError(error, 'mark job permanently failed');
+    return requirePersistedRow(data as CoachJob | null, 'mark job permanently failed');
+  }
+
+  static async markJobCompleted(jobId: string, completedAt: string): Promise<CoachJob | null> {
+    const { data, error } = await this.queueClient().from('candidate_career_coach_jobs')
+      .update({ status: 'completed', completed_at: completedAt, updated_at: completedAt, error_code: null })
+      .eq('id', jobId).eq('status', 'processing').select('*').maybeSingle();
+    throwOnDatabaseError(error, 'mark job completed');
+    return (data as CoachJob | null) || null;
+  }
+
   static async getThreads(userId: string): Promise<CoachThread[]> {
     const { data, error } = await getAdminClient().from('candidate_career_coach_threads')
       .select('*').eq('user_id', userId).eq('status', 'active').order('updated_at', { ascending: false });
