@@ -3,6 +3,8 @@
 -- Migration: 00022_stage7_6_ai_career_coach.sql
 -- ============================================================================
 
+BEGIN;
+
 -- The migration runner owns the transaction. Keeping transaction control outside
 -- this file allows the same DDL to be executed inside an explicit ROLLBACK dry-run.
 
@@ -75,7 +77,7 @@ CREATE TABLE public.candidate_career_coach_jobs (
     status text NOT NULL DEFAULT 'queued',
     attempt_count integer NOT NULL DEFAULT 0,
     provider text NOT NULL DEFAULT 'gemini',
-    model text NOT NULL DEFAULT 'gemini-2.5-flash',
+    model text NOT NULL,
     error_code text NULL,
     available_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     started_at timestamptz NULL,
@@ -129,7 +131,7 @@ CREATE INDEX idx_candidate_notifications_user ON public.candidate_notifications(
 CREATE UNIQUE INDEX uq_candidate_notifications_career_coach_job_link
     ON public.candidate_notifications(link_url)
     WHERE type = 'career_coach_response'
-      AND link_url LIKE '%&jobId=%';
+      AND link_url LIKE '%jobId=%';
 
 -- ----------------------------------------------------------------------------
 -- 5. RLS & PERMISSIONS
@@ -150,4 +152,4 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.candidate_career_coach_threads TO
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.candidate_career_coach_messages TO service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.candidate_career_coach_jobs TO service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.candidate_notifications TO service_role;
-
+COMMIT;
