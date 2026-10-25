@@ -12,8 +12,9 @@ import { candidateRouter } from './routes/candidate.js';
 import { cvParsingRouter } from './routes/cvParsing.js';
 import { talentPoolRouter } from './routes/talentPool.js';
 import { careerRouter } from './routes/career.js';
-import { careerCoachRouter } from './routes/careerCoach.js';
+import { careerCoachRouter, careerCoachNotificationsRouter } from './routes/careerCoach.js';
 import { processPendingCvParses } from './services/cv/cvParsingService.js';
+import { CareerCoachQueueService } from './services/careerCoach/careerCoachQueueService.js';
 
 export function createExpressApp(): express.Express {
   const app = express();
@@ -21,6 +22,11 @@ export function createExpressApp(): express.Express {
   // On app startup, trigger background recovery sweeper for durable pending CV parses
   processPendingCvParses().catch((err) => {
     console.warn('[CV_PARSER_RECOVERY_INIT] Recovery check completed:', err);
+  });
+
+  // Recovery runs asynchronously; app startup never waits for provider work.
+  void CareerCoachQueueService.recoverAndDrain().catch((err) => {
+    console.warn('[CAREER_COACH_RECOVERY_INIT] Recovery check failed:', err?.code || 'RECOVERY_ERROR');
   });
 
   // CORS & Preflight handling for browser and iframe API requests
@@ -52,7 +58,7 @@ export function createExpressApp(): express.Express {
 
   // API Routers
   app.use('/api/candidate/career/coach', careerCoachRouter);
-  app.use('/api/candidate/notifications', careerCoachRouter);
+  app.use('/api/candidate/notifications', careerCoachNotificationsRouter);
   app.use('/api/candidate/career', careerRouter);
   app.use('/api/candidate', candidateRouter);
   app.use('/api/candidate/cvs', cvParsingRouter);

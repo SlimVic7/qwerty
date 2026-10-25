@@ -1,44 +1,15 @@
 import express from 'express';
 import { CareerCoachStore } from '../services/careerCoach/careerCoachStore.js';
-import { CareerCoachQueueService } from '../services/careerCoach/careerCoachQueueService.js';
+import { CAREER_COACH_MODEL, CareerCoachQueueService } from '../services/careerCoach/careerCoachQueueService.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
 export const careerCoachRouter = express.Router();
 
-// Middleware: Authenticated candidate check
-function requireCandidateAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
-  // Extract token or header user ID
-  const authHeader = req.headers.authorization;
-  const userHeader = req.headers['x-user-id'] as string;
+// Use the established, verified Supabase session and candidate-role middleware.
+careerCoachRouter.use(requireAuth, requireRole(['candidate']));
 
-  let userId: string | null = null;
-  if (userHeader) {
-    userId = userHeader;
-  } else if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.split(' ')[1];
-    if (token && token.startsWith('user-')) {
-      userId = token;
-    } else {
-      userId = 'candidate-test-user-id';
-    }
-  }
-
-  if (!userId) {
-    // In preview / dev mode default to candidate-test-user-id if missing
-    if (process.env.NODE_ENV !== 'production') {
-      userId = 'candidate-test-user-id';
-    } else {
-      return res.status(401).json({
-        error: 'UNAUTHORIZED',
-        message: 'Authentication required'
-      });
-    }
-  }
-
-  (req as any).userId = userId;
-  next();
-}
-
-careerCoachRouter.use(requireCandidateAuth);
+export const careerCoachNotificationsRouter = express.Router();
+careerCoachNotificationsRouter.use(requireAuth, requireRole(['candidate']));
 
 /**
  * Feature flag check middleware
@@ -65,7 +36,7 @@ careerCoachRouter.use(checkFeatureFlag);
  */
 careerCoachRouter.post('/threads', async (req, res, next) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user!.id;
     const { career_role_id, title, initial_message } = req.body || {};
 
     const thread = await CareerCoachStore.createThread(userId, career_role_id, title);
@@ -75,7 +46,7 @@ careerCoachRouter.post('/threads', async (req, res, next) => {
 
     if (initial_message && typeof initial_message === 'string' && initial_message.trim().length > 0) {
       initialUserMsg = await CareerCoachStore.addMessage(thread.id, userId, 'user', initial_message.trim());
-      initialJob = await CareerCoachStore.createJob(userId, thread.id, initialUserMsg.id);
+      initialJob = await CareerCoachStore.createJob(userId, thread.id, initialUserMsg.id, CAREER_COACH_MODEL);
       CareerCoachQueueService.triggerWorker(initialJob.id);
     }
 
@@ -95,7 +66,7 @@ careerCoachRouter.post('/threads', async (req, res, next) => {
  */
 careerCoachRouter.get('/threads', async (req, res, next) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user!.id;
     const threads = await CareerCoachStore.getThreads(userId);
     return res.json({ threads });
   } catch (err) {
@@ -109,7 +80,7 @@ careerCoachRouter.get('/threads', async (req, res, next) => {
  */
 careerCoachRouter.get('/threads/:threadId', async (req, res, next) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user!.id;
     const { threadId } = req.params;
 
     const thread = await CareerCoachStore.getThreadById(threadId, userId);
@@ -133,7 +104,7 @@ careerCoachRouter.get('/threads/:threadId', async (req, res, next) => {
  */
 careerCoachRouter.post('/threads/:threadId/messages', async (req, res, next) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user!.id;
     const { threadId } = req.params;
     const { content } = req.body || {};
 
@@ -163,7 +134,7 @@ careerCoachRouter.post('/threads/:threadId/messages', async (req, res, next) => 
     const userMsg = await CareerCoachStore.addMessage(threadId, userId, 'user', content.trim());
 
     // Create durable queue job
-    const job = await CareerCoachStore.createJob(userId, threadId, userMsg.id);
+    const job = await CareerCoachStore.createJob(userId, threadId, userMsg.id, CAREER_COACH_MODEL);
 
     // Trigger asynchronous worker (unblocked HTTP response)
     CareerCoachQueueService.triggerWorker(job.id);
@@ -186,7 +157,7 @@ careerCoachRouter.post('/threads/:threadId/messages', async (req, res, next) => 
  */
 careerCoachRouter.get('/jobs/:jobId', async (req, res, next) => {
   try {
-    const userId = (req as any).userId;
+    const userId = req.user!.id;
     const { jobId } = req.params;
 
     const job = await CareerCoachStore.getJobById(jobId, userId);
@@ -216,12 +187,11 @@ careerCoachRouter.get('/jobs/:jobId', async (req, res, next) => {
 
 /**
  * GET /api/candidate/notifications
- * Lists in-app notifications and unread count for candidate.
+ * Lists in-app notifications for the verified candidate.
  */
-careerCoachRouter.get('/notifications', async (req, res, next) => {
+careerCoachNotificationsRouter.get('/', async (req, res, next) => {
   try {
-    const userId = (req as any).userId;
-    const { notifications, unreadCount } = await CareerCoachStore.getNotifications(userId);
+    const { notifications, unreadCount } = await CareerCoachStore.getNotifications(req.user!.id);
     return res.json({ notifications, unread_count: unreadCount });
   } catch (err) {
     next(err);
@@ -230,15 +200,13 @@ careerCoachRouter.get('/notifications', async (req, res, next) => {
 
 /**
  * PATCH /api/candidate/notifications/:id/read
- * Marks a notification as read.
+ * Marks a notification as read without revealing another candidate's records.
  */
-careerCoachRouter.patch('/notifications/:id/read', async (req, res, next) => {
+careerCoachNotificationsRouter.patch('/:id/read', async (req, res, next) => {
   try {
-    const userId = (req as any).userId;
-    const { id } = req.params;
-
-    const success = await CareerCoachStore.markNotificationRead(id, userId);
-    return res.json({ success });
+    const success = await CareerCoachStore.markNotificationRead(req.params.id, req.user!.id);
+    if (!success) return res.status(404).json({ error: 'NOTIFICATION_NOT_FOUND', message: 'Notification not found' });
+    return res.json({ success: true });
   } catch (err) {
     next(err);
   }
