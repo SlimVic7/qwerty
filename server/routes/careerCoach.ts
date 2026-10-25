@@ -14,11 +14,12 @@ careerCoachNotificationsRouter.use(requireAuth, requireRole(['candidate']));
 /**
  * Feature flag check middleware
  */
-function checkFeatureFlag(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const isEnabled = process.env.AI_CAREER_COACH_PUBLIC_ENABLED === 'true' || process.env.VITE_AI_CAREER_COACH_PUBLIC_ENABLED === 'true';
-  const hasPreviewOverride = req.headers['x-qwerty-preview-override'] === 'stage7_6_preview_unlocked';
+function checkFeatureFlag(_req: express.Request, res: express.Response, next: express.NextFunction) {
+  const isEnabled =
+    process.env.AI_CAREER_COACH_PUBLIC_ENABLED === 'true' ||
+    process.env.VITE_AI_CAREER_COACH_PUBLIC_ENABLED === 'true';
 
-  if (!isEnabled && !hasPreviewOverride && process.env.NODE_ENV === 'production') {
+  if (!isEnabled) {
     return res.status(503).json({
       error: 'FEATURE_DISABLED',
       message: 'AI Career Coach — Coming Soon'
