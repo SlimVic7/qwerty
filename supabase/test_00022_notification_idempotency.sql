@@ -25,8 +25,8 @@ BEGIN
     INSERT INTO public.candidate_career_coach_messages (id,thread_id,user_id,role,content,grounding_metadata)
     VALUES (v_user_message_id,v_thread_id,v_user_id,'user','Rollback-only test question','{}'::jsonb);
 
-    INSERT INTO public.candidate_career_coach_jobs (id,user_id,thread_id,user_message_id,status)
-    VALUES (v_job_id,v_user_id,v_thread_id,v_user_message_id,'queued');
+    INSERT INTO public.candidate_career_coach_jobs (id,user_id,thread_id,user_message_id,status,model)
+    VALUES (v_job_id,v_user_id,v_thread_id,v_user_message_id,'queued','migration-idempotency-test');
 
     INSERT INTO public.candidate_career_coach_messages (thread_id,user_id,role,content,grounding_metadata)
     VALUES (v_thread_id,v_user_id,'assistant','Rollback-only test response',jsonb_build_object('job_id',v_job_id::text));
