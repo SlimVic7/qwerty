@@ -65,7 +65,77 @@ describe('Stage 7.6 Batch 1 auth and route boundaries', () => {
     storeState.markNotificationRead.mockResolvedValue(false);
     process.env.AI_CAREER_COACH_PUBLIC_ENABLED = 'true';
   });
-  afterEach(() => { delete process.env.AI_CAREER_COACH_PUBLIC_ENABLED; });
+  afterEach(() => {
+    delete process.env.AI_CAREER_COACH_PUBLIC_ENABLED;
+    delete process.env.VITE_AI_CAREER_COACH_PUBLIC_ENABLED;
+  });
+
+
+  it('fails closed with 503 when both server-side feature flags are false or unset', async () => {
+    delete process.env.AI_CAREER_COACH_PUBLIC_ENABLED;
+    delete process.env.VITE_AI_CAREER_COACH_PUBLIC_ENABLED;
+
+    const response = await request(app).get('/api/candidate/career/coach/threads')
+      .set('Authorization', 'Bearer candidate-token');
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      error: 'FEATURE_DISABLED',
+      message: 'AI Career Coach — Coming Soon'
+    });
+    expect(storeState.getThreads).not.toHaveBeenCalled();
+  });
+
+  it('allows candidate routes when the server-side feature flag is true', async () => {
+    process.env.AI_CAREER_COACH_PUBLIC_ENABLED = 'true';
+    delete process.env.VITE_AI_CAREER_COACH_PUBLIC_ENABLED;
+
+    const response = await request(app).get('/api/candidate/career/coach/threads')
+      .set('Authorization', 'Bearer candidate-token');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ threads: [] });
+    expect(storeState.getThreads).toHaveBeenCalledWith(authState.userId);
+  });
+
+  it('does not allow x-qwerty-preview-override to unlock the feature outside production', async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = 'test';
+      delete process.env.AI_CAREER_COACH_PUBLIC_ENABLED;
+      delete process.env.VITE_AI_CAREER_COACH_PUBLIC_ENABLED;
+
+      const response = await request(app).get('/api/candidate/career/coach/threads')
+        .set('Authorization', 'Bearer candidate-token')
+        .set('x-qwerty-preview-override', 'stage7_6_preview_unlocked');
+
+      expect(response.status).toBe(503);
+      expect(storeState.getThreads).not.toHaveBeenCalled();
+    } finally {
+      if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = originalNodeEnv;
+    }
+  });
+
+  it('cannot be unlocked by request headers in production', async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = 'production';
+      delete process.env.AI_CAREER_COACH_PUBLIC_ENABLED;
+      delete process.env.VITE_AI_CAREER_COACH_PUBLIC_ENABLED;
+
+      const response = await request(app).get('/api/candidate/career/coach/threads')
+        .set('Authorization', 'Bearer candidate-token')
+        .set('x-qwerty-preview-override', 'stage7_6_preview_unlocked');
+
+      expect(response.status).toBe(503);
+      expect(response.body.error).toBe('FEATURE_DISABLED');
+      expect(storeState.getThreads).not.toHaveBeenCalled();
+    } finally {
+      if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = originalNodeEnv;
+    }
+  });
 
   it('does not accept x-user-id without a verified bearer session', async () => {
     const response = await request(app).get('/api/candidate/career/coach/threads')
