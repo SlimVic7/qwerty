@@ -105,7 +105,6 @@ BEGIN
         ('candidate_career_coach_jobs','status','queued'),
         ('candidate_career_coach_jobs','attempt_count','0'),
         ('candidate_career_coach_jobs','provider','gemini'),
-        ('candidate_career_coach_jobs','model','gemini-2.5-flash'),
         ('candidate_career_coach_jobs','available_at','CURRENT_TIMESTAMP'),
         ('candidate_career_coach_jobs','created_at','CURRENT_TIMESTAMP'),
         ('candidate_career_coach_jobs','updated_at','CURRENT_TIMESTAMP'),
@@ -125,6 +124,17 @@ BEGIN
           v_expected.table_name,v_expected.column_name,v_expected.expected_default));
       END IF;
     END LOOP;
+
+    -- The application persists CAREER_COACH_MODEL; model must have no database default.
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns c
+      WHERE c.table_schema='public'
+        AND c.table_name='candidate_career_coach_jobs'
+        AND c.column_name='model'
+        AND c.column_default IS NOT NULL
+    ) THEN
+      v_failed := array_append(v_failed, 'default mismatch: public.candidate_career_coach_jobs.model must have no database default');
+    END IF;
 
     -- D. Primary keys and unique ownership keys.
     FOR v_expected IN
